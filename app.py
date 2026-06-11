@@ -3,8 +3,10 @@ app.py — AI-Powered Agile Sprint Manager (Jira-style)
 CVR College of Engineering | IOMP Batch 19
 Run: streamlit run app.py
 """
+from zoneinfo import ZoneInfo
+
 import streamlit as st
-import sqlite3, pandas as pd, numpy as np, sys, os, io
+import pandas as pd, numpy as np, sys, os, io
 from datetime import date, timedelta, datetime
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -18,33 +20,315 @@ from models.ml_engine import (
     CompletionTimePredictor, RiskDetector, AutoBlockerDetector,
     VelocityForecaster, RecommendationEngine, compute_sprint_health
 )
+import time
+start_time = time.time()
 
 st.set_page_config(page_title="SprintAI", page_icon="⚡",
                    layout="wide", initial_sidebar_state="expanded")
 
 # ── session state for active tab ──────────────────────────────────────────────
+import urllib.parse
+import hmac
+import hashlib
+import json
+import base64
+import time
+import streamlit.components.v1 as components
+
+SECRET_KEY = os.getenv("SESSION_SECRET", os.getenv("SUPABASE_ANON_KEY", "sprintai_default_secret_key")).encode()
+
+def get_cookies():
+    try:
+        if hasattr(st, "context") and hasattr(st.context, "cookies"):
+            return dict(st.context.cookies)
+    except Exception:
+        pass
+    try:
+        from streamlit.web.server.websocket_headers import _get_websocket_headers
+        headers = _get_websocket_headers()
+        if not headers:
+            return {}
+        cookie_str = headers.get("Cookie", "")
+        cookies = {}
+        if cookie_str:
+            for cookie in cookie_str.split(";"):
+                parts = cookie.split("=", 1)
+                if len(parts) == 2:
+                    cookies[parts[0].strip()] = urllib.parse.unquote(parts[1].strip())
+        return cookies
+    except Exception:
+        return {}
+
+def set_cookie(name, value, days=None):
+    cookie_val = urllib.parse.quote(value)
+    if days is not None:
+        js = f"""
+        <script>
+        var date = new Date();
+        date.setTime(date.getTime() + ({days}*24*60*60*1000));
+        var expires = "; expires=" + date.toUTCString();
+        window.parent.document.cookie = "{name}=" + "{cookie_val}" + expires + "; path=/; SameSite=Lax";
+        </script>
+        """
+    else:
+        js = f"""
+        <script>
+        window.parent.document.cookie = "{name}=" + "{cookie_val}" + "; path=/; SameSite=Lax";
+        </script>
+        """
+    components.html(js, height=0, width=0)
+
+def delete_cookie(name):
+    js = f"""
+    <script>
+    window.parent.document.cookie = "{name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    </script>
+    """
+    components.html(js, height=0, width=0)
+
+def create_session_token(email, role, name):
+    data = {
+        "email": email,
+        "role": role,
+        "name": name,
+        "expires": time.time() + 7 * 24 * 60 * 60  # 7 days
+    }
+    payload = base64.b64encode(json.dumps(data).encode()).decode()
+    signature = hmac.new(SECRET_KEY, payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{signature}"
+
+def verify_session_token(token):
+    try:
+        parts = token.split(".")
+        if len(parts) != 2:
+            return None
+        payload, signature = parts
+        expected_sig = hmac.new(SECRET_KEY, payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected_sig):
+            return None
+        data = json.loads(base64.b64decode(payload.encode()).decode())
+        if time.time() > data.get("expires", 0):
+            return None
+        return data
+    except Exception:
+        return None
+
+cookies = get_cookies()
+
 if "tab" not in st.session_state:
-    st.session_state.tab = "Summary"
-# ADD THIS BELOW EXISTING CODE
-if "user" not in st.session_state:
+    st.session_state.tab = cookies.get("session_tab", "Summary")
+
+if "user" not in st.session_state or "role" not in st.session_state or "user_name" not in st.session_state:
     st.session_state["user"] = None
-if "role" not in st.session_state:
     st.session_state["role"] = None
+    st.session_state["user_name"] = None
+
+# Auto-login if session token is found in cookies
+if not st.session_state["user"] and not st.session_state.get("logout_triggered"):
+    token = cookies.get("session_token")
+    if token:
+        data = verify_session_token(token)
+        if data:
+            st.session_state["user"] = data["email"]
+            st.session_state["role"] = data["role"]
+            st.session_state["user_name"] = data["name"]
+            st.rerun()
 
 
 def render_auth_gate():
     # ADD THIS BELOW EXISTING CODE
-    # Center auth vertically only on this screen (do not use orphan HTML divs — Streamlit
-    # renders each st.markdown as a sibling, so never split a decorative wrapper across multiple calls.)
+    # Premium visual design overrides specifically for the authentication gate
     st.markdown(
         """
         <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;800&display=swap');
+        
+        /* Premium Background Gradient & Grid Pattern */
+        section.main {
+            background: 
+                radial-gradient(circle at 50% 50%, rgba(30, 27, 75, 0.55) 0%, #0f172a 100%),
+                linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px) !important;
+            background-size: 100% 100%, 36px 36px, 36px 36px !important;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Animated Background Glowing Blobs */
+        section.main::before, section.main::after {
+            content: "" !important;
+            position: absolute !important;
+            width: 350px !important;
+            height: 350px !important;
+            border-radius: 50% !important;
+            filter: blur(120px) !important;
+            z-index: 0 !important;
+            pointer-events: none !important;
+            opacity: 0.35 !important;
+        }
+        
+        section.main::before {
+            background: radial-gradient(circle, #4f46e5 0%, transparent 80%) !important;
+            top: 10% !important;
+            left: 15% !important;
+            animation: float-purple 15s infinite alternate ease-in-out !important;
+        }
+        
+        section.main::after {
+            background: radial-gradient(circle, #db2777 0%, transparent 80%) !important;
+            bottom: 10% !important;
+            right: 15% !important;
+            animation: float-pink 15s infinite alternate ease-in-out !important;
+        }
+        
+        @keyframes float-purple {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(80px, 50px) scale(1.2); }
+        }
+        
+        @keyframes float-pink {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(-80px, -50px) scale(1.2); }
+        }
+        
+        /* Center container and restrict max-width */
         section.main > div.block-container {
-            min-height: calc(100vh - 100px) !important;
+            min-height: 100vh !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: center !important;
-            padding-top: 24px !important;
+            align-items: center !important;
+            padding-top: 0px !important;
+            z-index: 1 !important;
+        }
+        
+        /* Glassmorphic Tabs (Login/Signup Card) */
+        div.stTabs {
+            position: relative !important;
+            z-index: 2 !important;
+            background: rgba(15, 23, 42, 0.55) !important;
+            backdrop-filter: blur(24px) !important;
+            -webkit-backdrop-filter: blur(24px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 16px !important;
+            padding: 24px 32px 32px 32px !important;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5), 0 0 80px rgba(99, 102, 241, 0.12) !important;
+            width: 420px !important;
+            margin: 0 auto !important;
+        }
+        
+        /* Hide outer double-borders of the form */
+        div.stTabs form {
+            border: none !important;
+            padding: 0 !important;
+            background: transparent !important;
+        }
+        
+        /* Modern Segmented Tabs Controller */
+        div.stTabs [data-baseweb="tab-list"] {
+            background: rgba(255, 255, 255, 0.04) !important;
+            border-radius: 8px !important;
+            padding: 4px !important;
+            border-bottom: none !important;
+            margin-bottom: 24px !important;
+        }
+        div.stTabs [data-baseweb="tab"] {
+            flex: 1 !important;
+            text-align: center !important;
+            border-radius: 6px !important;
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            color: #94a3b8 !important;
+            background: transparent !important;
+            transition: all 0.2s ease !important;
+        }
+        div.stTabs [data-baseweb="tab"][aria-selected="true"] {
+            background: rgba(255, 255, 255, 0.08) !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+        }
+        div.stTabs [data-baseweb="tab-highlight"] {
+            display: none !important;
+        }
+        
+        /* Custom Inputs */
+        div.stTabs input {
+            background: rgba(15, 23, 42, 0.4) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 8px !important;
+            color: #ffffff !important;
+            padding: 10px 14px !important;
+            font-size: 13px !important;
+            transition: all 0.25s ease !important;
+        }
+        div.stTabs input:focus {
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+            background: rgba(15, 23, 42, 0.6) !important;
+        }
+        
+        /* Select dropdown styling */
+        div.stTabs div[data-baseweb="select"] > div {
+            background: rgba(15, 23, 42, 0.4) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 8px !important;
+            color: #ffffff !important;
+        }
+        
+        /* Gradient Button overrides */
+        div.stTabs button[kind="primary"] {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 8px !important;
+            padding: 12px 24px !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.5px !important;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+            transition: all 0.25s ease !important;
+            width: 100% !important;
+            margin-top: 14px !important;
+        }
+        div.stTabs button[kind="primary"]:hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.55) !important;
+        }
+        div.stTabs button[kind="primary"]:active {
+            transform: translateY(1px) !important;
+        }
+        
+        /* Glowing branding elements */
+        .auth-logo-glowing {
+            font-size: 52px;
+            text-align: center;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.75));
+            animation: logo-pulse 2s infinite alternate ease-in-out;
+        }
+        @keyframes logo-pulse {
+            0% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.5)); }
+            100% { transform: scale(1.06); filter: drop-shadow(0 0 16px rgba(99, 102, 241, 0.9)); }
+        }
+        .auth-title-center {
+            color: #ffffff;
+            font-family: 'Outfit', 'Inter', sans-serif;
+            font-size: 34px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 4px;
+            letter-spacing: -1.2px;
+            background: linear-gradient(135deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .auth-sub-center {
+            color: #94a3b8;
+            font-size: 13px;
+            text-align: center;
+            margin-bottom: 24px;
+            letter-spacing: 0.2px;
         }
         </style>
         """,
@@ -54,8 +338,9 @@ def render_auth_gate():
     with mid:
         st.markdown(
             '<div class="auth-brand">'
-            '<div class="auth-title-center">⚡ SprintAI</div>'
-            '<div class="auth-sub-center">Login / Signup to continue</div>'
+            '<div class="auth-logo-glowing">⚡</div>'
+            '<div class="auth-title-center">SprintAI</div>'
+            '<div class="auth-sub-center">Agile Planning, Powered by AI</div>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -66,6 +351,7 @@ def render_auth_gate():
                 lu = st.text_input("Email", placeholder="name@company.com")
                 lp = st.text_input("Password", type="password", placeholder="Enter your password")
                 if st.form_submit_button("Login", type="primary", use_container_width=True):
+                    st.session_state["logout_triggered"] = False
                     ok, msg = login_user(lu, lp)
                     if ok:
                         st.success(msg)
@@ -203,17 +489,40 @@ div[data-testid="column"] .stButton>button.tab-btn {
 
 # ── DB & ML init ──────────────────────────────────────────────────────────────
 # ADD THIS BELOW EXISTING CODE
-_c = get_conn()
-create_tables(_c)
-seed_data(_c)  # fills demo project when DB is new (skipped if projects already exist)
-_c.close()
+@st.cache_resource(show_spinner="Initializing database connection...")
+def init_db():
+    conn = get_conn()
+    create_tables(conn)
+    seed_data(conn)
+    conn.close()
+    return True
+
+init_db()
 
 # ADD THIS BELOW EXISTING CODE
 if not st.session_state.get("user"):
+    if cookies.get("session_token"):
+        delete_cookie("session_token")
     render_auth_gate()
     st.stop()
 
-@st.cache_resource
+# Cookie synchronization for authenticated session
+cookies = get_cookies()
+if st.session_state.get("user"):
+    # Write session cookie if missing
+    if not cookies.get("session_token"):
+        token = create_session_token(
+            st.session_state["user"],
+            st.session_state["role"],
+            st.session_state.get("user_name", "")
+        )
+        set_cookie("session_token", token)
+    
+    # Write/update tab cookie if changed
+    if cookies.get("session_tab") != st.session_state.tab:
+        set_cookie("session_tab", st.session_state.tab)
+
+@st.cache_resource(show_spinner=False)
 def get_base_models():
     return RiskDetector(), AutoBlockerDetector(), VelocityForecaster(), RecommendationEngine()
 
@@ -229,7 +538,7 @@ def get_predictor_for_project(project_id):
         JOIN team_members tm ON t.assignee_id = tm.id
         WHERE t.actual_hours IS NOT NULL
           AND s.status = 'Completed'
-          AND s.project_id = ?
+          AND s.project_id = %s
     """, conn, params=[project_id])
     conn.close()
     count = len(df)
@@ -239,38 +548,210 @@ def get_predictor_for_project(project_id):
 
 risk_det, auto_det, vel_fc, rec_eng = get_base_models()
 
+# ── Matplotlib Chart Caching Helpers ──────────────────────────────────────────
+@st.cache_data(ttl=300, show_spinner=False)
+def get_status_donut_chart(done, inprog, todo, blk):
+    fig, ax = plt.subplots(figsize=(3, 3), facecolor='none')
+    szs = [done, inprog, todo, blk]
+    cls = ['#3fb950', '#58a6ff', '#8b949e', '#f85149']
+    lbls = ['Done', 'In Progress', 'To Do', 'Blocked']
+    nz = [(s, c, l) for s, c, l in zip(szs, cls, lbls) if s > 0]
+    if nz:
+        s2, c2, _ = zip(*nz)
+        ax.pie(s2, colors=c2, startangle=90, wedgeprops=dict(width=0.45, edgecolor='#0d1117', linewidth=2))
+        total = sum(szs)
+        ax.text(0, 0, str(total), ha='center', va='center', fontsize=20, fontweight='bold', color='#e6edf3')
+    ax.set_facecolor('none')
+    fig.patch.set_alpha(0)
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', transparent=True, dpi=120)
+    plt.close(fig)
+    return buf.getvalue()
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_counts_bar_chart(todo, inprog, done):
+    fig_counts, ax_counts = plt.subplots(figsize=(3.2, 1.4), facecolor="none")
+    labels = ["Pending", "In Progress", "Completed"]
+    values = [todo, inprog, done]
+    ax_counts.bar(labels, values, color=["#8b949e", "#58a6ff", "#3fb950"])
+    ax_counts.set_facecolor("#0d1117")
+    fig_counts.patch.set_alpha(0)
+    ax_counts.tick_params(colors="#8b949e", labelsize=9)
+    ax_counts.spines[:].set_color("#21262d")
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', transparent=True, dpi=120)
+    plt.close(fig_counts)
+    return buf.getvalue()
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_importance_chart(imps_tuple):
+    fig4, ax4 = plt.subplots(figsize=(6, 2.5), facecolor='none')
+    features = [x[0] for x in imps_tuple]
+    importances = [x[1] for x in imps_tuple]
+    ax4.barh(features, importances, color='#58a6ff', height=0.5)
+    ax4.set_facecolor('#0d1117')
+    fig4.patch.set_alpha(0)
+    ax4.tick_params(colors='#8b949e', labelsize=9)
+    ax4.spines[:].set_color('#21262d')
+    ax4.set_xlabel("Importance", color='#8b949e', fontsize=9)
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', transparent=True, dpi=120)
+    plt.close(fig4)
+    return buf.getvalue()
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_velocity_chart(planned_points_tuple, actual_points_tuple, sprint_names_tuple, forecast):
+    fig5, ax5 = plt.subplots(figsize=(8, 3), facecolor='none')
+    x = range(len(actual_points_tuple))
+    ax5.bar(x, planned_points_tuple, color='#21262d', label='Planned', width=0.4, align='edge')
+    ax5.bar([i - 0.4 for i in x], actual_points_tuple, color='#58a6ff', label='Actual', width=0.4, align='edge')
+    ax5.axhline(forecast, color='#3fb950', linestyle='--', linewidth=1.5, label=f'Forecast {forecast}')
+    ax5.set_xticks(x)
+    ax5.set_xticklabels(sprint_names_tuple, color='#8b949e', fontsize=9)
+    ax5.set_facecolor('#0d1117')
+    fig5.patch.set_alpha(0)
+    ax5.tick_params(colors='#8b949e')
+    ax5.spines[:].set_color('#21262d')
+    ax5.legend(facecolor='#161b22', edgecolor='#30363d', labelcolor='#8b949e', fontsize=9)
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', transparent=True, dpi=120)
+    plt.close(fig5)
+    return buf.getvalue()
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_sprint_scan_cached(sprint_id):
+    tdf_s = load_tasks(sprint_id=sprint_id)
+    if tdf_s.empty:
+        return {"tasks": [], "remaining_days": 0, "auto_blocked_count": 0, "delayed_count": 0, "at_risk_count": 0, "total_delay_days": 0}
+    df_sprint = qry("SELECT * FROM sprints WHERE id = %s", [sprint_id])
+    if df_sprint.empty:
+        return {"tasks": [], "remaining_days": 0, "auto_blocked_count": 0, "delayed_count": 0, "at_risk_count": 0, "total_delay_days": 0}
+    sprint_dict = df_sprint.iloc[0].to_dict()
+    return auto_det.scan_sprint(tdf_s.to_dict("records"), sprint_dict)
+
 # ── DB helpers ────────────────────────────────────────────────────────────────
 def qry(sql, params=()):
-    c=get_conn(); df=pd.read_sql_query(sql,c,params=list(params)); c.close(); return df
+    if isinstance(params, list):
+        params = tuple(params)
+    elif not isinstance(params, tuple):
+        params = (params,)
+    return _qry_cached(sql, params)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _qry_cached(sql, params):
+    c = get_conn()
+    df = pd.read_sql_query(sql, c, params=list(params))
+    c.close()
+    return df
 
 def exe(sql, params=()):
-    c=get_conn(); cur=c.execute(sql,list(params)); c.commit(); lid=cur.lastrowid; c.close(); return lid
+    c = get_conn()
+    cur = c.cursor()
+    sql_strip = sql.strip().upper()
+    is_insert = sql_strip.startswith("INSERT")
+    
+    if is_insert and "RETURNING" not in sql_strip:
+        query = sql + " RETURNING id"
+        cur.execute(query, list(params))
+        c.commit()
+        lid = cur.fetchone()[0]
+    else:
+        cur.execute(sql, list(params))
+        c.commit()
+        try:
+            lid = cur.fetchone()[0] if cur.description else None
+        except Exception:
+            lid = None
+            
+    cur.close()
+    c.close()
+    
+    # Invalidate Streamlit cache on write
+    st.cache_data.clear()
+    
+    # Reconcile sprints if tasks or sprints table is changed
+    if "TASKS" in sql_strip or "SPRINTS" in sql_strip:
+        try:
+            reconcile_sprint_points()
+        except Exception as e:
+            print(f"Reconciliation failed: {e}")
+            
+    return lid
 
-def load_projects():   return qry("SELECT * FROM projects ORDER BY id")
+def load_projects():
+    role = st.session_state.get("role")
+    user = st.session_state.get("user")
+    if not user:
+        return pd.DataFrame()
+    if role == "Manager":
+        # Managers see their own projects + legacy projects with no creator
+        return qry("SELECT * FROM projects WHERE created_by = %s OR created_by IS NULL ORDER BY id", [user])
+    else:
+        # Members see projects where their email matches
+        df_email = qry("""
+            SELECT DISTINCT p.*
+            FROM projects p
+            JOIN team_members tm ON p.id = tm.project_id
+            WHERE LOWER(tm.email) = LOWER(%s)
+            ORDER BY p.id
+        """, [user])
+        
+        if not df_email.empty:
+            return df_email
+            
+        # Fallback for legacy database rows where tm.email is NULL:
+        # Load all projects and check using name-based heuristic
+        df_proj = qry("SELECT * FROM projects ORDER BY id")
+        if df_proj.empty:
+            return df_proj
+            
+        df_team = qry("SELECT project_id, name, email FROM team_members")
+        local = str(user).split("@")[0].lower().replace(".", "").replace("_", "")
+        
+        matched_project_ids = []
+        for _, row in df_team.iterrows():
+            if pd.notna(row.get("email")) and str(row["email"]).strip() != "":
+                if str(row["email"]).lower() == str(user).lower():
+                    matched_project_ids.append(row["project_id"])
+            else:
+                name_clean = str(row["name"]).lower().replace(".", "").replace("_", "")
+                import re
+                name_clean = re.sub(r"[^a-z0-9]", "", name_clean)
+                if local in name_clean:
+                    matched_project_ids.append(row["project_id"])
+                    
+        return df_proj[df_proj["id"].isin(matched_project_ids)]
+
 def load_sprints(pid=None, status=None):
     s="SELECT * FROM sprints WHERE 1=1"; p=[]
-    if pid:    s+=" AND project_id=?"; p.append(pid)
-    if status: s+=" AND status=?";     p.append(status)
+    if pid:    s+=" AND project_id=%s"; p.append(pid)
+    if status: s+=" AND status=%s";     p.append(status)
     return qry(s+" ORDER BY id", p)
 def load_active(pid):
-    df=qry("SELECT * FROM sprints WHERE status='Active' AND project_id=? ORDER BY id DESC LIMIT 1",[pid])
+    df=qry("SELECT * FROM sprints WHERE status='Active' AND project_id=%s ORDER BY id DESC LIMIT 1",[pid])
     return df.iloc[0].to_dict() if not df.empty else None
 
 def apply_role_task_filter(df):
-    # ADD THIS BELOW EXISTING CODE
     if df is None or df.empty:
         return df
     role = st.session_state.get("role")
     user = st.session_state.get("user")
     user_name = st.session_state.get("user_name")
     if role == "Member" and user:
-        # Match by explicit full name first, then fallback to email local-part heuristic.
+        # Try strict email match first
+        if "assignee_email" in df.columns:
+            email_matches = df[df["assignee_email"].fillna("").str.lower() == str(user).lower()]
+            if not email_matches.empty:
+                return email_matches
+                
+        # Fallback to name heuristic for legacy tasks where email is NULL
         if "assignee_name" in df.columns:
             if user_name:
                 exact = df[df["assignee_name"] == user_name]
                 if not exact.empty:
                     return exact
             local = str(user).split("@")[0].lower().replace(".", "").replace("_", "")
+            import re
             return df[
                 df["assignee_name"].fillna("").str.lower().str.replace(r"[^a-z0-9]", "", regex=True).str.contains(local)
             ]
@@ -279,40 +760,78 @@ def apply_role_task_filter(df):
     return df
 
 def load_tasks(sprint_id=None, project_id=None, include_planning=False):
-    s="""SELECT t.*,tm.name as assignee_name,tm.velocity_avg,tm.avatar_color,sp.status as sprint_status
+    s="""SELECT t.*,tm.name as assignee_name,tm.email as assignee_email,tm.velocity_avg,tm.avatar_color,sp.status as sprint_status
          FROM tasks t
          LEFT JOIN team_members tm ON t.assignee_id=tm.id
          LEFT JOIN sprints sp ON t.sprint_id=sp.id
          WHERE 1=1"""
     p=[]
-    if sprint_id:  s+=" AND t.sprint_id=?";  p.append(sprint_id)
-    if project_id: s+=" AND t.project_id=?"; p.append(project_id)
+    if sprint_id:  s+=" AND t.sprint_id=%s";  p.append(sprint_id)
+    if project_id: s+=" AND t.project_id=%s"; p.append(project_id)
     # Hide tasks from not-started sprints unless explicitly requested.
     if not include_planning:
         s+=" AND (t.sprint_id IS NULL OR sp.status IS NULL OR sp.status!='Planning')"
     tdf = qry(s,p)
     return apply_role_task_filter(tdf)
-def load_team(pid):     return qry("SELECT * FROM team_members WHERE project_id=? ORDER BY id",[pid])
+def load_team(pid):     return qry("SELECT * FROM team_members WHERE project_id=%s ORDER BY id",[pid])
 def load_metrics(pid):  return qry("""SELECT sm.*,s.name as sprint_name,s.planned_points
     FROM sprint_metrics sm JOIN sprints s ON sm.sprint_id=s.id
-    WHERE s.project_id=? ORDER BY sm.sprint_id""",[pid])
-def load_activity(pid, n=20): return qry("SELECT * FROM activity_log WHERE project_id=? ORDER BY id DESC LIMIT ?",[pid,n])
+    WHERE s.project_id=%s ORDER BY sm.sprint_id""",[pid])
+def load_activity(pid, n=20): return qry("SELECT * FROM activity_log WHERE project_id=%s ORDER BY id DESC LIMIT %s",[pid,n])
 
-def reconcile_sprint_points(pid):
-    # ADD THIS BELOW EXISTING CODE
-    # Keep sprint point counters aligned with actual tasks in DB.
+def reconcile_sprint_points(pid=None):
     c = get_conn()
-    c.execute("""
-        UPDATE sprints
-        SET planned_points = COALESCE((
-            SELECT SUM(t.story_points) FROM tasks t WHERE t.sprint_id = sprints.id
-        ), 0),
-        completed_points = COALESCE((
-            SELECT SUM(t.story_points) FROM tasks t WHERE t.sprint_id = sprints.id AND t.status='Done'
-        ), 0)
-        WHERE project_id = ?
-    """, [pid])
+    cur = c.cursor()
+
+    if pid:
+        # Auto-calculate completed points for all sprints
+        cur.execute("""
+            UPDATE sprints
+            SET completed_points = COALESCE((
+                SELECT SUM(t.story_points)
+                FROM tasks t
+                WHERE t.sprint_id = sprints.id
+                AND t.status='Done'
+            ), 0)
+            WHERE project_id = %s
+        """, [pid])
+
+        # Auto-calculate planned points only for Active and Planning sprints
+        # (Completed sprints preserve their historical planned_points)
+        cur.execute("""
+            UPDATE sprints
+            SET planned_points = COALESCE((
+                SELECT SUM(t.story_points)
+                FROM tasks t
+                WHERE t.sprint_id = sprints.id
+            ), 0)
+            WHERE project_id = %s AND status != 'Completed'
+        """, [pid])
+    else:
+        # Auto-calculate completed points for all sprints across all projects
+        cur.execute("""
+            UPDATE sprints
+            SET completed_points = COALESCE((
+                SELECT SUM(t.story_points)
+                FROM tasks t
+                WHERE t.sprint_id = sprints.id
+                AND t.status='Done'
+            ), 0)
+        """)
+
+        # Auto-calculate planned points only for Active and Planning sprints across all projects
+        cur.execute("""
+            UPDATE sprints
+            SET planned_points = COALESCE((
+                SELECT SUM(t.story_points)
+                FROM tasks t
+                WHERE t.sprint_id = sprints.id
+            ), 0)
+            WHERE status != 'Completed'
+        """)
+
     c.commit()
+    cur.close()
     c.close()
 
 def member_opts(tdf):
@@ -335,6 +854,23 @@ def av_html(name, color="#3b82f6", size=26):
     return (f'<div style="width:{size}px;height:{size}px;border-radius:50%;background:{color};'
             f'display:inline-flex;align-items:center;justify-content:center;'
             f'font-size:{int(size*.4)}px;font-weight:700;color:#fff;flex-shrink:0">{name[0].upper()}</div>')
+
+def to_local_dt(dt_val):
+    try:
+        if pd.isna(dt_val):
+            return None
+
+        dt = pd.to_datetime(dt_val)
+
+        # Ensure timezone aware
+        if dt.tzinfo is None:
+            dt = dt.tz_localize("UTC")
+
+        # Convert UTC → India time
+        return dt.tz_convert(ZoneInfo("Asia/Kolkata"))
+
+    except Exception:
+        return None
 
 def chart_buf(fig):
     buf=io.BytesIO(); plt.savefig(buf,format='png',bbox_inches='tight',transparent=True,dpi=120)
@@ -373,10 +909,18 @@ with st.sidebar:
     # ADD THIS BELOW EXISTING CODE
     if st.session_state.get("role") == "Manager":
         with st.expander("＋ New Project"):
-            with st.form("np"):
+            with st.form("np", clear_on_submit=True):
                 n=st.text_input("Name *"); d=st.text_area("Description",height=50)
                 if st.form_submit_button("Create",type="primary"):
-                    if n.strip(): exe("INSERT INTO projects(name,description)VALUES(?,?)",(n.strip(),d)); st.rerun()
+                    if n.strip():
+                        user_email = st.session_state.get("user")
+                        owner_df = qry("SELECT id FROM profiles WHERE LOWER(email) = LOWER(%s)", [user_email])
+                        if not owner_df.empty:
+                            owner_id = owner_df.iloc[0]["id"]
+                            exe("INSERT INTO projects(name,description,created_by,owner_id)VALUES(%s,%s,%s,%s)",(n.strip(),d,user_email,owner_id))
+                        else:
+                            exe("INSERT INTO projects(name,description,created_by)VALUES(%s,%s,%s)",(n.strip(),d,user_email))
+                        st.rerun()
                     else: st.error("Name required")
     else:
         st.caption("Member access: project creation is restricted.")
@@ -389,10 +933,9 @@ with st.sidebar:
             st.markdown(f'<div style="color:#3fb950;font-size:12px;font-weight:600;margin-bottom:4px">🟢 {act_s["name"]}</div>', unsafe_allow_html=True)
             st.caption(act_s.get("goal","") or "No goal set")
             st.progress(min(pct,1.0), text=f"{cp}/{pp} pts · {pct*100:.0f}%")
-            # Auto-detection summary in sidebar
-            tdf_s = load_tasks(sprint_id=act_s["id"])
-            if not tdf_s.empty:
-                scan = auto_det.scan_sprint(tdf_s.to_dict("records"), act_s)
+            # Auto-detection summary in sidebar (Phase 2 Cached Scan) - only run on metrics-heavy tabs
+            if st.session_state.get("tab") in ["Summary", "AI Insights", "Reports", "List", "Board"]:
+                scan = get_sprint_scan_cached(int(act_s["id"]))
                 if scan["auto_blocked_count"] or scan["delayed_count"] or scan["at_risk_count"]:
                     st.markdown(f"""
                     <div style="background:#1a0b0b;border:1px solid #f8514940;border-radius:6px;padding:8px 10px;margin-top:8px">
@@ -411,7 +954,10 @@ with st.sidebar:
     # ADD THIS BELOW EXISTING CODE
     st.caption(f"👤 {st.session_state.get('user')} ({st.session_state.get('role')})")
     if st.button("🚪 Logout", use_container_width=True):
+        st.session_state["logout_triggered"] = True
         logout_user()
+        delete_cookie("session_token")
+        delete_cookie("session_tab")
         st.rerun()
 
 # ── Guard ─────────────────────────────────────────────────────────────────────
@@ -424,15 +970,14 @@ if not proj_id:
     </div>""", unsafe_allow_html=True)
     st.stop()
 
-# ADD THIS BELOW EXISTING CODE
-reconcile_sprint_points(proj_id)
+# Reconciled in the background on data modifications, no need to run on every page load.
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  TOP NAV — project header + clickable tabs
 # ══════════════════════════════════════════════════════════════════════════════
-TABS = ["Summary","List","Board","Sprints","Task Creation","Team","AI Insights","Reports"]
+TABS = ["Summary","List","Board","Sprints","Task Creation","Team","AI Insights","Reports","Daily Progress"]
 TAB_ICONS = {"Summary":"📊","List":"📋","Board":"🗂️","Sprints":"🏃",
-             "Task Creation":"🗒️","Team":"👥","AI Insights":"🔮","Reports":"📄"}
+             "Task Creation":"🗒️","Team":"👥","AI Insights":"🔮","Reports":"📄","Daily Progress":"📝"}
 
 # ── Project name above tabs (like Jira) ──────────────────────────────────────
 st.markdown(f"""
@@ -486,9 +1031,9 @@ if page == "Summary":
     todo   = sum(1 for t in tasks if t["status"]=="Todo")
     blk    = sum(1 for t in tasks if t["status"]=="Blocked")
 
-    # Auto-detection scan
-    if act and not tdf.empty:
-        scan = auto_det.scan_sprint(tasks, act)
+    # Auto-detection scan (Phase 2 Cached Scan)
+    if act:
+        scan = get_sprint_scan_cached(int(act["id"]))
         ab   = scan["auto_blocked_count"]
         dl   = scan["delayed_count"]
         ar   = scan["at_risk_count"]
@@ -518,15 +1063,7 @@ if page == "Summary":
     dc2.metric("In Progress", inprog)
     dc3.metric("Completed", done)
 
-    fig_counts, ax_counts = plt.subplots(figsize=(3.2, 1.4), facecolor="none")
-    labels = ["Pending", "In Progress", "Completed"]
-    values = [todo, inprog, done]
-    ax_counts.bar(labels, values, color=["#8b949e", "#58a6ff", "#3fb950"])
-    ax_counts.set_facecolor("#0d1117")
-    fig_counts.patch.set_alpha(0)
-    ax_counts.tick_params(colors="#8b949e", labelsize=9)
-    ax_counts.spines[:].set_color("#21262d")
-    st.image(chart_buf(fig_counts), width=320)
+    st.image(get_counts_bar_chart(todo, inprog, done), width=320)
 
     left, right = st.columns([1.4,1])
 
@@ -535,18 +1072,12 @@ if page == "Summary":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("**📊 Status Overview**")
         if total > 0:
+            szs = [done, inprog, todo, blk]
+            cls = ['#3fb950', '#58a6ff', '#8b949e', '#f85149']
+            lbls = ['Done', 'In Progress', 'To Do', 'Blocked']
             cl,cr=st.columns([1,1.1])
             with cl:
-                fig,ax=plt.subplots(figsize=(3,3),facecolor='none')
-                szs=[done,inprog,todo,blk]; cls=['#3fb950','#58a6ff','#8b949e','#f85149']
-                lbls=['Done','In Progress','To Do','Blocked']
-                nz=[(s,c,l) for s,c,l in zip(szs,cls,lbls) if s>0]
-                if nz:
-                    s2,c2,_=zip(*nz)
-                    ax.pie(s2,colors=c2,startangle=90,wedgeprops=dict(width=0.45,edgecolor='#0d1117',linewidth=2))
-                    ax.text(0,0,str(total),ha='center',va='center',fontsize=20,fontweight='bold',color='#e6edf3')
-                ax.set_facecolor('none'); fig.patch.set_alpha(0)
-                st.image(chart_buf(fig),use_container_width=True)
+                st.image(get_status_donut_chart(done, inprog, todo, blk), use_container_width=True)
             with cr:
                 for s,c,l in zip(szs,cls,lbls):
                     if s>0:
@@ -640,7 +1171,7 @@ if page == "Summary":
         else:
             for _,a in acts.head(8).iterrows():
                 actor=str(a.get("actor","System")); col=cmap.get(actor,"#8b949e")
-                fld=a.get("field_changed",""); nv=a.get("new_value",""); tt=a.get("task_title",""); ts=str(a.get("created_at",""))[:16]
+                fld=a.get("field_changed",""); nv=a.get("new_value",""); tt=a.get("task_title",""); ts_dt=to_local_dt(a.get("created_at")); ts=ts_dt.strftime("%Y-%m-%d %H:%M") if ts_dt else str(a.get("created_at",""))[:16]
                 desc=f'<b style="color:#58a6ff">{a.get("action","updated")}</b>'
                 if fld and nv: desc+=f' <span style="color:#8b949e">{fld}</span> → <span style="color:#3fb950">{nv}</span>'
                 if tt: desc+=f' on <b style="color:#c9d1d9">{tt}</b>'
@@ -726,8 +1257,7 @@ elif page == "List":
     # Run auto-detection on filtered tasks
     scan_data = {}
     if act and not all_t.empty:
-        sprint_for_scan = act
-        scanned = auto_det.scan_sprint(all_t.to_dict("records"), sprint_for_scan)
+        scanned = get_sprint_scan_cached(int(act["id"]))
         for t in scanned["tasks"]:
             scan_data[t["id"]] = t["auto_detection"]
 
@@ -801,11 +1331,11 @@ elif page == "List":
                 nah=st.number_input("Actual Hours",0.0,200.0,float(trow.get("actual_hours") or 0.0),step=0.5)
                 nbl=st.text_input("Blocker Note",value=trow.get("blocker_note") or "")
                 if st.form_submit_button("💾 Save",type="primary"):
-                    exe("UPDATE tasks SET status=?,priority=?,assignee_id=?,actual_hours=?,blocker_note=?,updated_at=datetime('now') WHERE id=?",
+                    exe("UPDATE tasks SET status=%s,priority=%s,assignee_id=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
                         (ns,np2,na,nah or None,nbl or None,int(trow["id"])))
                     if ns!=trow["status"] and trow.get("sprint_id"):
-                        if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+? WHERE id=?",(int(trow["story_points"]),int(trow["sprint_id"])))
-                        elif trow["status"]=="Done": exe("UPDATE sprints SET completed_points=MAX(0,completed_points-?) WHERE id=?",(int(trow["story_points"]),int(trow["sprint_id"])))
+                        if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(int(trow["story_points"]),int(trow["sprint_id"])))
+                        elif trow["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(trow["story_points"]),int(trow["sprint_id"])))
                     log_activity(proj_id,opts2.get(na,"User").split(" (")[0],"updated",trow["title"],"status",trow["status"],int(trow["id"]),trow.get("sprint_id"),trow["title"])
                     st.success("Saved!"); st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -830,7 +1360,7 @@ elif page == "Board":
     # Auto-detect
     scan2={}
     if not tdf.empty:
-        sc=auto_det.scan_sprint(tasks, srow.to_dict())
+        sc=get_sprint_scan_cached(sid)
         if sc["auto_blocked_count"] or sc["delayed_count"]:
             st.markdown(f"""
             <div style="background:#1a0b0b;border:1px solid #f8514960;border-radius:8px;
@@ -856,11 +1386,11 @@ elif page == "Board":
                 na=uc2.number_input("Actual Hours",0.0,200.0,float(cur.get("actual_hours") or 0.0),step=0.5)
                 nb=uc3.text_input("Blocker Note",value=cur.get("blocker_note") or "")
                 if st.form_submit_button("💾 Save",type="primary"):
-                    exe("UPDATE tasks SET status=?,actual_hours=?,blocker_note=?,updated_at=datetime('now') WHERE id=?",
+                    exe("UPDATE tasks SET status=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
                         (ns,na or None,nb or None,tid))
                     if ns!=cur["status"]:
-                        if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+? WHERE id=?",(int(cur["story_points"]),sid))
-                        elif cur["status"]=="Done": exe("UPDATE sprints SET completed_points=MAX(0,completed_points-?) WHERE id=?",(int(cur["story_points"]),sid))
+                        if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(int(cur["story_points"]),sid))
+                        elif cur["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(cur["story_points"]),sid))
                     log_activity(proj_id,"User","updated",sel_t,"status",cur["status"],int(cur["id"]),sid,sel_t)
                     st.success("Updated!"); st.rerun()
 
@@ -912,12 +1442,12 @@ elif page == "Sprints":
     st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
     if st.session_state.get("role") == "Manager":
         with st.expander("➕ Create New Sprint",expanded=True):
-            with st.form("cs"):
+            with st.form("cs", clear_on_submit=True):
                 st.markdown("#### New Sprint")
                 sc1,sc2=st.columns(2)
                 sn=sc1.text_input("Sprint Name *",placeholder="Sprint 1"); sg=sc1.text_input("Sprint Goal",placeholder="e.g. Complete auth module")
                 ss=sc2.date_input("Start Date",value=date.today()); se=sc2.date_input("End Date",value=date.today()+timedelta(days=14))
-                sp=sc2.number_input("Planned Story Points",10,200,40)
+                sp=sc2.number_input("Planned Story Points",0,300,40)
                 if st.form_submit_button("🚀 Create Sprint",type="primary"):
                     if not sn.strip(): st.error("Name required.")
                     elif se<=ss: st.error("End must be after start.")
@@ -925,7 +1455,7 @@ elif page == "Sprints":
                         ex=load_sprints(pid=proj_id)
                         if not ex.empty and sn.strip() in ex["name"].tolist(): st.error("Name exists.")
                         else:
-                            exe("INSERT INTO sprints(project_id,name,goal,start_date,end_date,status,planned_points,completed_points)VALUES(?,?,?,?,?,?,?,?)",
+                            exe("INSERT INTO sprints(project_id,name,goal,start_date,end_date,status,planned_points,completed_points)VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
                                 (proj_id,sn.strip(),sg.strip(),str(ss),str(se),"Planning",sp,0))
                             log_activity(proj_id,"User","created sprint",sn.strip())
                             st.success(f"Sprint '{sn}' created!"); st.rerun()
@@ -936,8 +1466,16 @@ elif page == "Sprints":
     sdf=load_sprints(pid=proj_id)
     if sdf.empty: st.info("No sprints yet."); st.markdown('</div>',unsafe_allow_html=True); st.stop()
 
+    # Phase 1 Optimization: Load all tasks once and filter in memory
+    all_project_tasks = load_tasks(project_id=proj_id, include_planning=True)
+    has_active_sprint = (sdf["status"] == "Active").any()
+
     for _,s in sdf.iterrows():
-        sid2=int(s["id"]); stask=load_tasks(sprint_id=sid2)
+        sid2=int(s["id"])
+        if not all_project_tasks.empty:
+            stask = all_project_tasks[all_project_tasks["sprint_id"] == sid2]
+        else:
+            stask = pd.DataFrame()
         dp=int(s["completed_points"]); pp=int(s["planned_points"]); pct=dp/max(pp,1)*100
         icon={"Planning":"🔵","Active":"🟢","Completed":"✅"}.get(s["status"],"⚪")
         with st.expander(f"{icon} **{s['name']}**  ·  {s['status']}  ·  {dp}/{pp} pts  ·  {s['start_date']} → {s['end_date']}",expanded=(s["status"]=="Active")):
@@ -948,30 +1486,30 @@ elif page == "Sprints":
                     c1,c2=st.columns(2)
                     en=c1.text_input("Name",value=s["name"]); eg=c1.text_input("Goal",value=s.get("goal") or "")
                     esd=c2.date_input("Start",value=pd.to_datetime(s["start_date"]).date()); eed=c2.date_input("End",value=pd.to_datetime(s["end_date"]).date())
-                    ep=c2.number_input("Planned Pts",10,300,int(s["planned_points"]))
+                    ep=c2.number_input("Planned Pts",0,300,int(s["planned_points"] or 0))
                     if st.form_submit_button("💾 Save"):
-                        exe("UPDATE sprints SET name=?,goal=?,start_date=?,end_date=?,planned_points=? WHERE id=?",(en,eg,str(esd),str(eed),ep,sid2)); st.success("Updated!"); st.rerun()
+                          exe("UPDATE sprints SET name=%s,goal=%s,start_date=%s,end_date=%s,planned_points=%s WHERE id=%s",(en,eg,str(esd),str(eed),ep,sid2)); st.success("Updated!"); st.rerun()
             with er:
                 st.markdown("**Actions**")
                 if st.session_state.get("role") == "Manager":
                     if s["status"]=="Planning":
-                        if load_active(proj_id): st.warning("Another sprint is active.")
+                        if has_active_sprint: st.warning("Another sprint is active.")
                         elif st.button("▶️ Start Sprint",key=f"st_{sid2}",type="primary"):
-                            exe("UPDATE sprints SET status='Active' WHERE id=?",(sid2,)); log_activity(proj_id,"User","started sprint",s["name"]); st.success("Started!"); st.rerun()
+                            exe("UPDATE sprints SET status='Active' WHERE id=%s",(sid2,)); log_activity(proj_id,"User","started sprint",s["name"]); st.success("Started!"); st.rerun()
                     if s["status"]=="Active":
                         if st.button("✅ Complete Sprint",key=f"cp_{sid2}",type="primary"):
-                            exe("UPDATE tasks SET sprint_id=NULL WHERE sprint_id=? AND status!='Done'",(sid2,))
-                            exe("UPDATE sprints SET status='Completed' WHERE id=?",(sid2,))
+                            exe("UPDATE tasks SET sprint_id=NULL WHERE sprint_id=%s AND status!='Done'",(sid2,))
+                            exe("UPDATE sprints SET status='Completed' WHERE id=%s",(sid2,))
                             tl=stask.to_dict("records"); dc=sum(1 for t in tl if t["status"]=="Done"); bc=sum(1 for t in tl if t["status"]=="Blocked")
-                            exe("INSERT OR REPLACE INTO sprint_metrics(sprint_id,velocity,completion_rate,avg_cycle_time,blockers_count,on_time_tasks,late_tasks)VALUES(?,?,?,?,?,?,?)",
+                            exe("INSERT INTO sprint_metrics(sprint_id,velocity,completion_rate,avg_cycle_time,blockers_count,on_time_tasks,late_tasks)VALUES(%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (sprint_id) DO UPDATE SET velocity = EXCLUDED.velocity, completion_rate = EXCLUDED.completion_rate, avg_cycle_time = EXCLUDED.avg_cycle_time, blockers_count = EXCLUDED.blockers_count, on_time_tasks = EXCLUDED.on_time_tasks, late_tasks = EXCLUDED.late_tasks",
                                 (sid2,dp,round(dp/max(pp,1)*100,1),2.5,bc,dc,len(tl)-dc))
                             log_activity(proj_id,"User","completed sprint",s["name"]); st.success("Completed!"); st.rerun()
                     if s["status"]=="Planning" and st.button("🗑️ Delete",key=f"dl_{sid2}"):
-                        exe("DELETE FROM sprint_metrics WHERE sprint_id=?",(sid2,)); exe("UPDATE tasks SET sprint_id=NULL WHERE sprint_id=?",(sid2,)); exe("DELETE FROM sprints WHERE id=?",(sid2,)); st.success("Deleted."); st.rerun()
+                        exe("DELETE FROM sprint_metrics WHERE sprint_id=%s",(sid2,)); exe("UPDATE tasks SET sprint_id=NULL WHERE sprint_id=%s",(sid2,)); exe("DELETE FROM sprints WHERE id=%s",(sid2,)); st.success("Deleted."); st.rerun()
                 else:
                     st.caption("Member access: sprint actions are restricted.")
             st.divider(); st.markdown("**📥 Add Backlog Tasks**")
-            backlog=qry("SELECT id,title,priority,story_points FROM tasks WHERE project_id=? AND (sprint_id IS NULL OR sprint_id=0)",[proj_id])
+            backlog=qry("SELECT id,title,priority,story_points FROM tasks WHERE project_id=%s AND (sprint_id IS NULL OR sprint_id=0)",[proj_id])
             if backlog.empty: st.caption("No unassigned tasks.")
             else:
                 if st.session_state.get("role") == "Manager":
@@ -979,7 +1517,7 @@ elif page == "Sprints":
                         sel_t2=st.multiselect("Select tasks",backlog["title"].tolist())
                         if st.form_submit_button("📥 Add to Sprint"):
                             for tit in sel_t2:
-                                tr2=backlog[backlog["title"]==tit].iloc[0]; exe("UPDATE tasks SET sprint_id=? WHERE id=?",(sid2,int(tr2["id"]))); exe("UPDATE sprints SET planned_points=planned_points+? WHERE id=?",(int(tr2["story_points"]),sid2))
+                                tr2=backlog[backlog["title"]==tit].iloc[0]; exe("UPDATE tasks SET sprint_id=%s WHERE id=%s",(sid2,int(tr2["id"]))); exe("UPDATE sprints SET planned_points=planned_points+%s WHERE id=%s",(int(tr2["story_points"]),sid2))
                             st.success(f"Added {len(sel_t2)}!"); st.rerun()
                 else:
                     st.caption("Member access: backlog-to-sprint assignment is restricted.")
@@ -998,7 +1536,7 @@ elif page == "Task Creation":
 
     if st.session_state.get("role") == "Manager":
         with st.expander("➕ Create New Task",expanded=True):
-            with st.form("ct"):
+            with st.form("ct", clear_on_submit=True):
                 st.markdown("#### New Task")
                 r1,r2=st.columns(2)
                 t_tit=r1.text_input("Title *",placeholder="e.g. Implement login API")
@@ -1024,9 +1562,9 @@ elif page == "Task Creation":
                             if not sr3.empty: cap=int(sr3["planned_points"].values[0])
                         pred=get_predictor_for_project(proj_id)[0].predict(t_sp,t_eh,t_pr,vel3,cap)
                         init="Blocked" if t_bl.strip() else "Todo"
-                        nid=exe("INSERT INTO tasks(sprint_id,project_id,title,description,assignee_id,priority,status,issue_type,story_points,estimated_hours,tags,blocker_note)VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                        nid=exe("INSERT INTO tasks(sprint_id,project_id,title,description,assignee_id,priority,status,issue_type,story_points,estimated_hours,tags,blocker_note)VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                                 (t_spr,proj_id,t_tit.strip(),t_des.strip(),t_as,t_pr,init,t_typ,t_sp,t_eh,t_tag.strip(),t_bl.strip() or None))
-                        if t_spr: exe("UPDATE sprints SET planned_points=planned_points+? WHERE id=?",(t_sp,t_spr))
+                        if t_spr: exe("UPDATE sprints SET planned_points=planned_points+%s WHERE id=%s",(t_sp,t_spr))
                         actor=opts2.get(t_as,"User").split(" (")[0]
                         log_activity(proj_id,actor,"created",t_tit.strip(),"status","Todo",nid,t_spr,t_tit.strip())
                         c1,c2,c3=st.columns(3)
@@ -1086,19 +1624,19 @@ elif page == "Task Creation":
                         sv,dl=st.columns(2)
                         if sv.form_submit_button("💾",type="primary"):
                             old_pts=int(t["story_points"])
-                            exe("UPDATE tasks SET title=?,status=?,priority=?,assignee_id=?,story_points=?,estimated_hours=?,actual_hours=?,blocker_note=?,sprint_id=?,updated_at=datetime('now') WHERE id=?",
+                            exe("UPDATE tasks SET title=%s,status=%s,priority=%s,assignee_id=%s,story_points=%s,estimated_hours=%s,actual_hours=%s,blocker_note=%s,sprint_id=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
                                 (e_t,e_s,e_p,e_a,e_sp2,e_eh,e_ah or None,e_bl or None,e_spr2,int(t["id"])))
-                            if t.get("sprint_id") and t["sprint_id"]!=e_spr2: exe("UPDATE sprints SET planned_points=MAX(0,planned_points-?) WHERE id=?",(old_pts,int(t["sprint_id"])))
-                            if e_spr2 and e_spr2!=t.get("sprint_id"): exe("UPDATE sprints SET planned_points=planned_points+? WHERE id=?",(e_sp2,e_spr2))
-                            if e_s=="Done" and t["status"]!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=completed_points+? WHERE id=?",(e_sp2,e_spr2))
-                            elif t["status"]=="Done" and e_s!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=MAX(0,completed_points-?) WHERE id=?",(e_sp2,e_spr2))
+                            if t.get("sprint_id") and t["sprint_id"]!=e_spr2: exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(old_pts,int(t["sprint_id"])))
+                            if e_spr2 and e_spr2!=t.get("sprint_id"): exe("UPDATE sprints SET planned_points=planned_points+%s WHERE id=%s",(e_sp2,e_spr2))
+                            if e_s=="Done" and t["status"]!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(e_sp2,e_spr2))
+                            elif t["status"]=="Done" and e_s!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(e_sp2,e_spr2))
                             log_activity(proj_id,opts2.get(e_a,"User").split(" (")[0],"updated",e_t,"status",t["status"],int(t["id"]),e_spr2,e_t)
                             st.success("Saved!"); st.rerun()
                         if dl.form_submit_button("🗑️"):
                             if t.get("sprint_id"):
-                                exe("UPDATE sprints SET planned_points=MAX(0,planned_points-?) WHERE id=?",(int(t["story_points"]),int(t["sprint_id"])))
-                                if t["status"]=="Done": exe("UPDATE sprints SET completed_points=MAX(0,completed_points-?) WHERE id=?",(int(t["story_points"]),int(t["sprint_id"])))
-                            exe("DELETE FROM tasks WHERE id=?",(int(t["id"]),)); st.success("Deleted."); st.rerun()
+                                exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(int(t["story_points"]),int(t["sprint_id"])))
+                                if t["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(t["story_points"]),int(t["sprint_id"])))
+                            exe("DELETE FROM tasks WHERE id=%s",(int(t["id"]),)); st.success("Deleted."); st.rerun()
     st.markdown('</div>',unsafe_allow_html=True)
 
 
@@ -1112,15 +1650,17 @@ elif page == "Team":
     AVCOLS=["#ec4899","#3b82f6","#10b981","#f59e0b","#8b5cf6","#06b6d4","#f43f5e","#84cc16"]
 
     with st.expander("➕ Add Team Member",expanded=team.empty):
-        with st.form("am"):
-            mc1,mc2,mc3=st.columns(3)
-            mn=mc1.text_input("Full Name *"); mr=mc2.selectbox("Role",ROLES); mv=mc3.number_input("Velocity",1.0,60.0,12.0,step=0.5)
+        with st.form("am", clear_on_submit=True):
+            mc1,mc2,mc3,mc4=st.columns(4)
+            mn=mc1.text_input("Full Name *"); me=mc2.text_input("Email *"); mr=mc3.selectbox("Role",ROLES); mv=mc4.number_input("Velocity",1.0,60.0,12.0,step=0.5)
             if st.form_submit_button("➕ Add",type="primary"):
                 if not mn.strip(): st.error("Name required.")
-                elif not team.empty and mn.strip() in team["name"].tolist(): st.error("Already exists.")
+                elif not me.strip(): st.error("Email required.")
+                elif not team.empty and mn.strip() in team["name"].tolist(): st.error("Name already exists.")
+                elif not team.empty and me.strip() in team["email"].fillna("").tolist(): st.error("Email already exists.")
                 else:
                     col2=AVCOLS[len(team)%len(AVCOLS)]
-                    exe("INSERT INTO team_members(name,role,velocity_avg,project_id,avatar_color)VALUES(?,?,?,?,?)",(mn.strip(),mr,mv,proj_id,col2))
+                    exe("INSERT INTO team_members(name,role,velocity_avg,project_id,avatar_color,email)VALUES(%s,%s,%s,%s,%s,%s)",(mn.strip(),mr,mv,proj_id,col2,me.strip()))
                     log_activity(proj_id,mn.strip(),"joined team"); st.success(f"✅ {mn} added!"); st.rerun()
 
     st.divider()
@@ -1129,7 +1669,7 @@ elif page == "Team":
     rows=[]
     for _,m in team.iterrows():
         mt=tdf[tdf["assignee_id"]==m["id"]] if not tdf.empty else pd.DataFrame()
-        rows.append({"Name":m["name"],"Role":m["role"],"Velocity":m["velocity_avg"],"Sprint Tasks":len(mt),
+        rows.append({"Name":m["name"],"Email":m.get("email") or "—","Role":m["role"],"Velocity":m["velocity_avg"],"Sprint Tasks":len(mt),
                      "Done":len(mt[mt["status"]=="Done"]) if not mt.empty else 0,"Blocked":len(mt[mt["status"]=="Blocked"]) if not mt.empty else 0})
     st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
     st.divider()
@@ -1145,13 +1685,15 @@ elif page == "Team":
                 else: st.caption("No tasks this sprint.")
             with ec2:
                 with st.form(f"em_{m['id']}"):
-                    en2=st.text_input("Name",value=m["name"]); er2=st.selectbox("Role",ROLES,index=ROLES.index(m["role"]) if m["role"] in ROLES else 0)
+                    en2=st.text_input("Name",value=m["name"])
+                    ee2=st.text_input("Email",value=m.get("email") or "")
+                    er2=st.selectbox("Role",ROLES,index=ROLES.index(m["role"]) if m["role"] in ROLES else 0)
                     ev2=st.number_input("Velocity",1.0,60.0,float(m["velocity_avg"]),step=0.5)
                     sv3,rm3=st.columns(2)
                     if sv3.form_submit_button("💾 Save",type="primary"):
-                        exe("UPDATE team_members SET name=?,role=?,velocity_avg=? WHERE id=?",(en2,er2,ev2,int(m["id"]))); st.success("Saved!"); st.rerun()
+                        exe("UPDATE team_members SET name=%s,email=%s,role=%s,velocity_avg=%s WHERE id=%s",(en2,ee2.strip(),er2,ev2,int(m["id"]))); st.success("Saved!"); st.rerun()
                     if rm3.form_submit_button("🗑️ Remove"):
-                        exe("UPDATE tasks SET assignee_id=NULL WHERE assignee_id=?",(int(m["id"]),)); exe("DELETE FROM team_members WHERE id=?",(int(m["id"]),)); st.success("Removed."); st.rerun()
+                        exe("UPDATE tasks SET assignee_id=NULL WHERE assignee_id=%s",(int(m["id"]),)); exe("DELETE FROM team_members WHERE id=%s",(int(m["id"]),)); st.success("Removed."); st.rerun()
     st.markdown('</div>',unsafe_allow_html=True)
 
 
@@ -1180,8 +1722,8 @@ elif page == "AI Insights":
         if not act:
             st.info("No active sprint to analyze.")
         else:
-            tdf5=load_tasks(sprint_id=act["id"]); tasks5=tdf5.to_dict("records")
-            scan5=auto_det.scan_sprint(tasks5, act)
+            # Phase 2 Optimization: Use cached sprint scan
+            scan5 = get_sprint_scan_cached(int(act["id"]))
 
             c1,c2,c3,c4=st.columns(4)
             c1.metric("Auto-Flagged",  scan5["auto_blocked_count"], help="Tasks AI detected as effectively blocked")
@@ -1230,13 +1772,7 @@ elif page == "AI Insights":
             st.success(f"✅ Random Forest trained on **{hist_count} tasks** from this project  |  MAE: **{proj_predictor.mae}h**")
             imps = proj_predictor.feature_importances()
             if imps:
-                fig4,ax4=plt.subplots(figsize=(6,2.5),facecolor='none')
-                imp_df=pd.DataFrame({"Feature":list(imps.keys()),"Importance":list(imps.values())}).sort_values("Importance")
-                ax4.barh(imp_df["Feature"],imp_df["Importance"],color='#58a6ff',height=0.5)
-                ax4.set_facecolor('#0d1117'); fig4.patch.set_alpha(0)
-                ax4.tick_params(colors='#8b949e',labelsize=9); ax4.spines[:].set_color('#21262d')
-                ax4.set_xlabel("Importance",color='#8b949e',fontsize=9)
-                st.image(chart_buf(fig4),use_container_width=True)
+                st.image(get_importance_chart(tuple(sorted(imps.items()))), use_container_width=True)
         else:
             st.markdown(f"""
             <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;
@@ -1296,14 +1832,7 @@ elif page == "AI Insights":
             vl5=mets5["velocity"].tolist(); fc5=vel_fc.forecast(vl5)
             v1,v2,v3=st.columns(3)
             v1.metric("Forecast",f"{fc5['forecast']} pts"); v2.metric("Trend",fc5["trend"].capitalize()); v3.metric("Confidence",f"{fc5['confidence']*100:.0f}%")
-            fig5,ax5=plt.subplots(figsize=(8,3),facecolor='none')
-            x=range(len(vl5)); ax5.bar(x,mets5["planned_points"],color='#21262d',label='Planned',width=0.4,align='edge')
-            ax5.bar([i-.4 for i in x],vl5,color='#58a6ff',label='Actual',width=0.4,align='edge')
-            ax5.axhline(fc5["forecast"],color='#3fb950',linestyle='--',linewidth=1.5,label=f'Forecast {fc5["forecast"]}')
-            ax5.set_xticks(x); ax5.set_xticklabels(mets5["sprint_name"],color='#8b949e',fontsize=9)
-            ax5.set_facecolor('#0d1117'); fig5.patch.set_alpha(0); ax5.tick_params(colors='#8b949e'); ax5.spines[:].set_color('#21262d')
-            ax5.legend(facecolor='#161b22',edgecolor='#30363d',labelcolor='#8b949e',fontsize=9)
-            st.image(chart_buf(fig5),use_container_width=True)
+            st.image(get_velocity_chart(tuple(mets5["planned_points"].tolist()), tuple(vl5), tuple(mets5["sprint_name"].tolist()), fc5["forecast"]), use_container_width=True)
 
     with tab4:
         st.subheader("🔍 Risk Analyzer")
@@ -1377,6 +1906,179 @@ elif page == "Reports":
       </div>
     </div>""", unsafe_allow_html=True)
 
+    # ── Excel Export (Managers only) ──
+    if st.session_state.get("role") == "Manager":
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("#### 📥 Export Project Reports")
+        st.caption("Download all project sprints, tickets, time logs, and member workloads as a single Excel spreadsheet.")
+        
+        try:
+            import openpyxl
+            openpyxl_installed = True
+        except ImportError:
+            openpyxl_installed = False
+            
+        if not openpyxl_installed:
+            st.error("⚠️ The spreadsheet export engine (`openpyxl`) is missing. Please contact your system administrator to run `pip install openpyxl`.")
+        else:
+            def generate_excel_data():
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    # 1. Project Overview
+                    proj_info = qry("SELECT name, description, created_by, created_at FROM projects WHERE id = %s", [proj_id])
+                    if not proj_info.empty and 'created_at' in proj_info.columns:
+                        proj_info['created_at'] = proj_info['created_at'].apply(lambda x: to_local_dt(x).strftime('%Y-%m-%d %H:%M:%S') if to_local_dt(x) else '')
+                    proj_info.to_excel(writer, sheet_name='Project Overview', index=False)
+                    
+                    # 2. Sprints
+                    sprints_info = qry("""
+                        SELECT id, name, goal, start_date, end_date, status, planned_points, completed_points 
+                        FROM sprints WHERE project_id = %s ORDER BY id
+                    """, [proj_id])
+                    if sprints_info.empty:
+                        sprints_info = pd.DataFrame([{"Message": "No sprints recorded for this project."}])
+                    sprints_info.to_excel(writer, sheet_name='Sprints', index=False)
+                    
+                    # 3. Tasks & Tickets
+                    tasks_info = qry("""
+                        SELECT t.id as task_id, t.title, t.description, tm.name as assignee_name, tm.email as assignee_email, 
+                               s.name as sprint_name, t.priority, t.status, t.issue_type, t.story_points, t.estimated_hours, t.actual_hours, 
+                               t.blocker_note, t.due_date, t.created_at, t.updated_at
+                        FROM tasks t 
+                        LEFT JOIN team_members tm ON t.assignee_id = tm.id 
+                        LEFT JOIN sprints s ON t.sprint_id = s.id 
+                        WHERE t.project_id = %s ORDER BY t.id
+                    """, [proj_id])
+                    if tasks_info.empty:
+                        tasks_info = pd.DataFrame([{"Message": "No tasks recorded for this project."}])
+                    else:
+                        for col in ['created_at', 'updated_at']:
+                            if col in tasks_info.columns:
+                                 tasks_info[col] = tasks_info[col].apply(lambda x: to_local_dt(x).strftime('%Y-%m-%d %H:%M:%S') if to_local_dt(x) else '')
+                    tasks_info.to_excel(writer, sheet_name='Tasks & Tickets', index=False)
+                    
+                    # 4. Daily Progress Logs
+                    logs_info = qry("""
+                        SELECT mc.id as log_id, mc.created_at as timestamp, tm.name as member_name, tm.email as member_email, 
+                               s.name as sprint_name, t.title as task_title, mc.comment_text, mc.hours_logged
+                        FROM member_comments mc
+                        JOIN team_members tm ON mc.member_id = tm.id
+                        LEFT JOIN sprints s ON mc.sprint_id = s.id
+                        LEFT JOIN tasks t ON mc.task_id = t.id
+                        WHERE mc.project_id = %s ORDER BY mc.id DESC
+                    """, [proj_id])
+                    if logs_info.empty:
+                        logs_info = pd.DataFrame([{"Message": "No daily progress logs recorded for this project."}])
+                    else:
+                        if 'timestamp' in logs_info.columns:
+                             logs_info['timestamp'] = logs_info['timestamp'].apply(lambda x: to_local_dt(x).strftime('%Y-%m-%d %H:%M:%S') if to_local_dt(x) else '')
+                    logs_info.to_excel(writer, sheet_name='Daily Progress Logs', index=False)
+                    
+                    # 5. Team Workload
+                    workload_info = qry("""
+                        SELECT tm.id as member_id, tm.name, tm.email, tm.role, tm.velocity_avg,
+                               (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = tm.id) as total_tasks,
+                               (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = tm.id AND t.status = 'Done') as completed_tasks,
+                               (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = tm.id AND t.status = 'Blocked') as blocked_tasks,
+                               (SELECT COALESCE(SUM(t.actual_hours), 0) FROM tasks t WHERE t.assignee_id = tm.id) as total_hours_spent
+                        FROM team_members tm 
+                        WHERE tm.project_id = %s ORDER BY tm.id
+                    """, [proj_id])
+                    if workload_info.empty:
+                        workload_info = pd.DataFrame([{"Message": "No team members registered for this project."}])
+                    workload_info.to_excel(writer, sheet_name='Team Workload', index=False)
+                    
+                buffer.seek(0)
+                return buffer.getvalue()
+            
+            clean_proj_name = "".join(c for c in proj_name if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+            filename = f"SprintAI_Export_{clean_proj_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            st.download_button(
+                label="📥 Download Project Excel Report",
+                data=generate_excel_data(),
+                file_name=filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                type="primary"
+            )
+            
+            st.markdown("---")
+            st.markdown("#### 👤 Export Individual Team Member Report")
+            st.caption("Select a team member to download their specific task assignments, daily logs, and performance metrics.")
+            
+            team_df = load_team(proj_id)
+            if team_df.empty:
+                st.info("No team members registered for this project yet.")
+            else:
+                member_opts = {int(row["id"]): f"{row['name']} ({row['role']})" for _, row in team_df.iterrows()}
+                selected_m_id = st.selectbox("Select Team Member", list(member_opts.keys()), format_func=lambda x: member_opts[x])
+                
+                selected_m_name = team_df[team_df["id"] == selected_m_id].iloc[0]["name"]
+                
+                def generate_member_excel_data(m_id, m_name):
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                        # 1. Member Profile & Metrics
+                        profile_info = qry("""
+                            SELECT tm.name, tm.email, tm.role, tm.velocity_avg,
+                                   (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = tm.id AND t.project_id = %s) as total_tasks,
+                                   (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = tm.id AND t.project_id = %s AND t.status = 'Done') as completed_tasks,
+                                   (SELECT COUNT(*) FROM tasks t WHERE t.assignee_id = tm.id AND t.project_id = %s AND t.status = 'Blocked') as blocked_tasks,
+                                   (SELECT COALESCE(SUM(t.actual_hours), 0) FROM tasks t WHERE t.assignee_id = tm.id AND t.project_id = %s) as total_hours_spent
+                            FROM team_members tm
+                            WHERE tm.id = %s AND tm.project_id = %s
+                        """, [proj_id, proj_id, proj_id, proj_id, m_id, proj_id])
+                        profile_info.to_excel(writer, sheet_name='Member Profile', index=False)
+                        
+                        # 2. Assigned Tasks
+                        member_tasks = qry("""
+                            SELECT t.id as task_id, t.title, t.description, 
+                                   s.name as sprint_name, t.priority, t.status, t.issue_type, t.story_points, t.estimated_hours, t.actual_hours, 
+                                   t.blocker_note, t.due_date, t.created_at, t.updated_at
+                            FROM tasks t 
+                            LEFT JOIN sprints s ON t.sprint_id = s.id 
+                            WHERE t.assignee_id = %s AND t.project_id = %s ORDER BY t.id
+                        """, [m_id, proj_id])
+                        if member_tasks.empty:
+                            member_tasks = pd.DataFrame([{"Message": "No tasks assigned to this team member."}])
+                        else:
+                            for col in ['created_at', 'updated_at']:
+                                if col in member_tasks.columns:
+                                     member_tasks[col] = member_tasks[col].apply(lambda x: to_local_dt(x).strftime('%Y-%m-%d %H:%M:%S') if to_local_dt(x) else '')
+                        member_tasks.to_excel(writer, sheet_name='Assigned Tasks', index=False)
+                        
+                        # 3. Daily Progress Logs
+                        member_logs = qry("""
+                            SELECT mc.id as log_id, mc.created_at as timestamp, 
+                                   s.name as sprint_name, t.title as task_title, mc.comment_text, mc.hours_logged
+                            FROM member_comments mc
+                            LEFT JOIN sprints s ON mc.sprint_id = s.id
+                            LEFT JOIN tasks t ON mc.task_id = t.id
+                            WHERE mc.member_id = %s AND mc.project_id = %s ORDER BY mc.id DESC
+                        """, [m_id, proj_id])
+                        if member_logs.empty:
+                            member_logs = pd.DataFrame([{"Message": "No daily progress logs recorded for this team member."}])
+                        else:
+                            if 'timestamp' in member_logs.columns:
+                                 member_logs['timestamp'] = member_logs['timestamp'].apply(lambda x: to_local_dt(x).strftime('%Y-%m-%d %H:%M:%S') if to_local_dt(x) else '')
+                        member_logs.to_excel(writer, sheet_name='Daily Progress Logs', index=False)
+                        
+                    buffer.seek(0)
+                    return buffer.getvalue()
+                
+                clean_m_name = "".join(c for c in selected_m_name if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+                member_filename = f"SprintAI_Member_{clean_m_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                
+                st.download_button(
+                    label=f"📥 Download Report for {selected_m_name}",
+                    data=generate_member_excel_data(selected_m_id, selected_m_name),
+                    file_name=member_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+        st.markdown('</div>', unsafe_allow_html=True)
+
     r1,r2=st.columns(2)
     with r1:
         st.markdown("**🔍 Risk Factors**")
@@ -1409,3 +2111,292 @@ elif page == "Reports":
         st.dataframe(tdf7[[c for c in sc4 if c in tdf7.columns]].fillna("—"),use_container_width=True,hide_index=True)
     st.caption("*Auto-generated · AI Sprint Manager · CVR College IOMP Batch 19*")
     st.markdown('</div>',unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  📝 DAILY PROGRESS
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Daily Progress":
+    st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
+    st.markdown("### 📝 Daily Progress Logs")
+    st.caption("Log daily progress, update hours, and track team status updates.")
+    
+    role = st.session_state.get("role")
+    user = st.session_state.get("user")
+    
+    # ── 1. Load active project details ──
+    if not proj_id:
+        st.warning("Please select or create a project first.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.stop()
+        
+    sprints_df = load_sprints(pid=proj_id)
+    active_sprint = load_active(proj_id)
+    
+    member_df = qry("SELECT * FROM team_members WHERE LOWER(email) = LOWER(%s) AND project_id = %s", [user, proj_id])
+    
+    # ── MEMBER VIEW ──
+    if role == "Member":
+        if member_df.empty:
+            st.error("⚠️ You are not registered as a team member in this project. Please contact your manager.")
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.stop()
+            
+        member_row = member_df.iloc[0]
+        member_id = int(member_row["id"])
+        member_name = member_row["name"]
+        
+        lcol, rcol = st.columns([1, 1.2])
+        
+        with lcol:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown(f"#### 📝 Log Today's Progress ({member_name})")
+            
+            with st.form("log_progress_form", clear_on_submit=True):
+                sprint_opts = {None: "— No Sprint / Backlog —"}
+                if not sprints_df.empty:
+                    sprint_opts.update({int(row["id"]): f"{row['name']} ({row['status']})" for _, row in sprints_df.iterrows()})
+                
+                def_sprint_id = int(active_sprint["id"]) if active_sprint else None
+                sprint_keys = list(sprint_opts.keys())
+                sprint_idx = sprint_keys.index(def_sprint_id) if def_sprint_id in sprint_keys else 0
+                
+                sel_sprint_id = st.selectbox("Link to Sprint", sprint_keys, index=sprint_idx, format_func=lambda x: sprint_opts[x])
+                
+                task_query = "SELECT id, title, status FROM tasks WHERE assignee_id = %s AND project_id = %s"
+                task_params = [member_id, proj_id]
+                if sel_sprint_id:
+                    task_query += " AND sprint_id = %s"
+                    task_params.append(sel_sprint_id)
+                task_query += " ORDER BY id DESC"
+                
+                tasks_df = qry(task_query, task_params)
+                
+                task_opts = {None: "— No Specific Task —"}
+                if not tasks_df.empty:
+                    task_opts.update({int(row["id"]): f"[{row['id']}] {row['title']} ({row['status']})" for _, row in tasks_df.iterrows()})
+                    
+                sel_task_id = st.selectbox("Link to Task (Optional)", list(task_opts.keys()), format_func=lambda x: task_opts[x])
+                
+                sprint_completed_and_locked = False
+                if sel_sprint_id:
+                    srow = sprints_df[sprints_df["id"] == sel_sprint_id]
+                    if not srow.empty and srow.iloc[0]["status"] == "Completed":
+                        end_date_str = srow.iloc[0].get("end_date")
+                        if end_date_str:
+                            try:
+                                end_dt = pd.to_datetime(end_date_str)
+                                time_diff = (datetime.now() - end_dt).total_seconds() / 3600
+                                if time_diff > 48:
+                                    sprint_completed_and_locked = True
+                            except:
+                                pass
+                
+                comment_val = st.text_area("What did you accomplish today? *", placeholder="Describe your progress, milestones, or blockers...")
+                
+                if sprint_completed_and_locked:
+                    st.caption("🔒 Time logging is locked for this completed sprint (>48h ago). Only comments are allowed.")
+                    hours_logged = 0.0
+                else:
+                    hours_logged = st.number_input("Time Spent Today (Hours)", min_value=0.0, max_value=24.0, value=0.0, step=0.5, help="This will be added to the task's total actual hours.")
+                
+                submit_log = st.form_submit_button("Submit Progress Log", type="primary", use_container_width=True)
+                
+                if submit_log:
+                    if not comment_val.strip():
+                        st.error("Progress comment is required.")
+                    else:
+                        if sel_task_id:
+                            valid_df = qry("SELECT 1 FROM tasks WHERE id = %s AND project_id = %s AND assignee_id = %s", [sel_task_id, proj_id, member_id])
+                            if valid_df.empty:
+                                st.error("Mismatched task, project, or assignee.")
+                                st.stop()
+                                
+                        new_comment_id = exe("""
+                            INSERT INTO member_comments (project_id, member_id, sprint_id, task_id, comment_text, hours_logged)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, (proj_id, member_id, sel_sprint_id, sel_task_id, comment_val.strip(), hours_logged))
+                        
+                        if sel_task_id and hours_logged > 0.0 and not sprint_completed_and_locked:
+                            exe("""
+                                UPDATE tasks 
+                                SET actual_hours = COALESCE(actual_hours, 0) + %s, updated_at = CURRENT_TIMESTAMP 
+                                WHERE id = %s
+                            """, (hours_logged, sel_task_id))
+                            
+                            task_title_row = tasks_df[tasks_df["id"] == sel_task_id]
+                            task_title = task_title_row.iloc[0]["title"] if not task_title_row.empty else "Task"
+                            log_activity(proj_id, member_name, f"logged {hours_logged}h", task_title, "actual_hours", "", f"+{hours_logged}h", sel_task_id, sel_sprint_id)
+                            
+                        st.success("Daily progress log successfully submitted!")
+                        st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with rcol:
+            st.markdown("#### 🕒 My Recent Logs")
+            
+            my_logs = qry("""
+                SELECT mc.*, s.name as sprint_name, t.title as task_title, t.id as t_id
+                FROM member_comments mc
+                LEFT JOIN sprints s ON mc.sprint_id = s.id
+                LEFT JOIN tasks t ON mc.task_id = t.id
+                WHERE mc.member_id = %s AND mc.project_id = %s
+                ORDER BY mc.id DESC
+            """, [member_id, proj_id])
+            
+            if my_logs.empty:
+                st.caption("You haven't logged any progress comments in this project yet.")
+            else:
+                for _, log in my_logs.iterrows():
+                    log_id = int(log["id"])
+                    created_at_dt = to_local_dt(log["created_at"])
+                    if created_at_dt:
+                        time_elapsed_hrs = (datetime.now(created_at_dt.tzinfo) - created_at_dt).total_seconds() / 3600
+                        can_edit = time_elapsed_hrs <= 24.0
+                        time_str = created_at_dt.strftime("%d %b %Y • %I:%M %p IST")
+                    else:
+                        can_edit = False
+                        time_str = str(log["created_at"]) if pd.notna(log["created_at"]) else "Unknown Time"
+                    task_info = f" · Task: **{log['task_title']}**" if log["task_title"] else ""
+                    sprint_info = f" · Sprint: **{log['sprint_name']}**" if log["sprint_name"] else ""
+                    hours_info = f" · Time: **{log['hours_logged']}h**" if float(log["hours_logged"]) > 0 else ""
+                    
+                    st.markdown(f"""
+                    <div class="card" style="border-left: 3px solid #10b981;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-size:11px; color:#8b949e;">🕒 {time_str}{sprint_info}{task_info}{hours_info}</span>
+                        </div>
+                        <p style="color:#e6edf3; font-size:13px; margin:0;">{log['comment_text']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if can_edit:
+                        with st.expander("✏️ Correct Log Entry", expanded=False):
+                            with st.form(f"edit_log_{log_id}"):
+                                new_comment_text = st.text_area("Comment", value=log["comment_text"], key=f"ec_{log_id}")
+                                new_hours = st.number_input("Hours", min_value=0.0, max_value=24.0, value=float(log["hours_logged"]), step=0.5, key=f"eh_{log_id}")
+                                
+                                ecol1, ecol2 = st.columns(2)
+                                save_btn = ecol1.form_submit_button("💾 Save", type="primary")
+                                delete_btn = ecol2.form_submit_button("🗑️ Delete", type="secondary")
+                                
+                                if save_btn:
+                                    if not new_comment_text.strip():
+                                        st.error("Comment cannot be empty.")
+                                    else:
+                                        old_hours = float(log["hours_logged"])
+                                        diff = new_hours - old_hours
+                                        
+                                        exe("UPDATE member_comments SET comment_text = %s, hours_logged = %s WHERE id = %s",
+                                            (new_comment_text.strip(), new_hours, log_id))
+                                            
+                                        if log["task_id"] and diff != 0.0:
+                                            exe("UPDATE tasks SET actual_hours = COALESCE(actual_hours, 0) + %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                                                (diff, int(log["task_id"])))
+                                                
+                                            log_activity(proj_id, member_name, f"updated time log (diff {diff:+.1f}h)", log["task_title"], "actual_hours", f"{old_hours}h", f"{new_hours}h", int(log["task_id"]), log["sprint_id"])
+                                        
+                                        st.success("Log entry updated successfully!")
+                                        st.rerun()
+                                        
+                                if delete_btn:
+                                    old_hours = float(log["hours_logged"])
+                                    exe("DELETE FROM member_comments WHERE id = %s", [log_id])
+                                    
+                                    if log["task_id"] and old_hours > 0.0:
+                                        exe("UPDATE tasks SET actual_hours = GREATEST(0.0, COALESCE(actual_hours, 0) - %s), updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                                            (old_hours, int(log["task_id"])))
+                                            
+                                        log_activity(proj_id, member_name, f"removed progress log ({old_hours}h)", log["task_title"], "actual_hours", f"{old_hours}h", "0.0h", int(log["task_id"]), log["sprint_id"])
+                                        
+                                    st.success("Log entry deleted.")
+                                    st.rerun()
+
+    # ── MANAGER VIEW ──
+    elif role == "Manager":
+        st.markdown("#### 👥 Team Work Progress Logs")
+        
+        fcol1, fcol2, fcol3 = st.columns([1, 1, 1.2])
+        
+        team_df = load_team(proj_id)
+        team_opts = {None: "— All Members —"}
+        if not team_df.empty:
+            team_opts.update({int(row["id"]): row["name"] for _, row in team_df.iterrows()})
+            
+        sel_member_id = fcol1.selectbox("Filter by Member", list(team_opts.keys()), format_func=lambda x: team_opts[x])
+        
+        sprint_opts = {None: "— All Sprints —"}
+        if not sprints_df.empty:
+            sprint_opts.update({int(row["id"]): row["name"] for _, row in sprints_df.iterrows()})
+            
+        sel_sprint_id = fcol2.selectbox("Filter by Sprint", list(sprint_opts.keys()), format_func=lambda x: sprint_opts[x])
+        
+        try:
+            date_sel = fcol3.date_input("Filter by Date Range", [date.today() - timedelta(days=7), date.today()])
+        except:
+            date_sel = [date.today() - timedelta(days=7), date.today()]
+            
+        search_query = st.text_input("🔍 Search comments", "")
+        
+        query_str = """
+            SELECT mc.*, tm.name as member_name, tm.avatar_color, tm.email as member_email,
+                   s.name as sprint_name, t.title as task_title
+            FROM member_comments mc
+            JOIN team_members tm ON mc.member_id = tm.id
+            LEFT JOIN sprints s ON mc.sprint_id = s.id
+            LEFT JOIN tasks t ON mc.task_id = t.id
+            WHERE mc.project_id = %s
+        """
+        params = [proj_id]
+        
+        if sel_member_id:
+            query_str += " AND mc.member_id = %s"
+            params.append(sel_member_id)
+        if sel_sprint_id:
+            query_str += " AND mc.sprint_id = %s"
+            params.append(sel_sprint_id)
+        if isinstance(date_sel, (list, tuple)) and len(date_sel) == 2:
+            query_str += " AND mc.created_at >= %s AND mc.created_at <= %s"
+            params.append(str(date_sel[0]) + " 00:00:00")
+            params.append(str(date_sel[1]) + " 23:59:59")
+        if search_query.strip():
+            query_str += " AND mc.comment_text ILIKE %s"
+            params.append(f"%{search_query.strip()}%")
+            
+        query_str += " ORDER BY mc.id DESC"
+        
+        comments_df = qry(query_str, params)
+        
+        if comments_df.empty:
+            st.info("No matching daily progress logs found.")
+        else:
+            st.caption(f"Showing {len(comments_df)} log entry/entries")
+            for _, log in comments_df.iterrows():
+                log_id = int(log["id"])
+                created_at_dt = to_local_dt(log["created_at"])
+                if created_at_dt:
+                    time_str = created_at_dt.strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    time_str = str(log["created_at"]) if pd.notna(log["created_at"]) else "Unknown Time"
+                
+                m_name = log["member_name"]
+                m_color = log.get("avatar_color", "#3b82f6")
+                
+                task_info = f" · Task: **{log['task_title']}**" if log["task_title"] else ""
+                sprint_info = f" · Sprint: **{log['sprint_name']}**" if log["sprint_name"] else ""
+                hours_info = f" · Time Logged: **{log['hours_logged']}h**" if float(log["hours_logged"]) > 0 else ""
+                
+                st.markdown(f"""
+                <div class="card" style="border-left: 3px solid #3b82f6;">
+                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
+                        {av_html(m_name, m_color, 24)}
+                        <div>
+                            <span style="font-weight:600; color:#e6edf3; font-size:13px;">{m_name}</span>
+                            <span style="font-size:11px; color:#8b949e; margin-left:8px;">🕒 {time_str}{sprint_info}{task_info}{hours_info}</span>
+                        </div>
+                    </div>
+                    <p style="color:#e6edf3; font-size:13px; margin:0; padding-left:34px;">{log['comment_text']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                            
+    st.markdown('</div>', unsafe_allow_html=True)

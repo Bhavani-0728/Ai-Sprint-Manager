@@ -31,6 +31,17 @@ def _get_supabase_client():
     except Exception as exc:
         return None, f"Supabase client init failed: {exc}"
 
+def _format_auth_error(exc, prefix="Operation failed"):
+    err = str(exc)
+    if "getaddrinfo" in err or "connection" in err.lower() or "timeout" in err.lower() or "failed to establish" in err.lower():
+        return "⚠️ Network Connection Error: Unable to reach the Supabase server. Please check your internet connection and try again."
+    if "Email not confirmed" in err or "email not confirmed" in err:
+        return (
+            f"{prefix}: email not confirmed. Please verify your email first, "
+            "or disable email confirmation in Supabase Auth settings for local development."
+        )
+    return f"{prefix}: {err}"
+
 
 def signup_user(username, password, role="Member"):
     # ADD THIS BELOW EXISTING CODE
@@ -57,7 +68,7 @@ def signup_user(username, password, role="Member"):
         )
         return True, "Signup successful. Please login."
     except Exception as exc:
-        return False, f"Signup failed: {exc}"
+        return False, _format_auth_error(exc, "Signup failed")
 
 
 def login_user(username, password):
@@ -74,13 +85,7 @@ def login_user(username, password):
     try:
         resp = client.auth.sign_in_with_password({"email": username, "password": password})
     except Exception as exc:
-        err = str(exc)
-        if "Email not confirmed" in err or "email not confirmed" in err:
-            return False, (
-                "Login failed: email not confirmed. Please verify your email first, "
-                "or disable email confirmation in Supabase Auth settings for local development."
-            )
-        return False, f"Login failed: {err}"
+        return False, _format_auth_error(exc, "Login failed")
 
     user = getattr(resp, "user", None)
     if not user:
