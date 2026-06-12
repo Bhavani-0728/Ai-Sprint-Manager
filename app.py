@@ -268,11 +268,57 @@ def render_landing_page():
         color: #94A3B8;
         line-height: 1.5;
     }
+    
+    /* Bright, premium button styles for landing page only */
+    div.stButton > button[kind="primary"],
+    div.stButton > button[data-testid="baseButton-primary"] {
+        background: linear-gradient(135deg, #10b981, #059669) !important;
+        border: none !important;
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.4) !important;
+        transition: all 0.3s ease !important;
+    }
+    div.stButton > button[kind="primary"] *,
+    div.stButton > button[data-testid="baseButton-primary"] * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+    }
+    div.stButton > button[kind="primary"]:hover,
+    div.stButton > button[data-testid="baseButton-primary"]:hover {
+        transform: scale(1.05) !important;
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.6) !important;
+    }
+    div.stButton > button[kind="secondary"],
+    div.stButton > button[data-testid="baseButton-secondary"] {
+        background: rgba(88, 166, 255, 0.15) !important;
+        border: 1px solid #58a6ff !important;
+        box-shadow: 0 0 10px rgba(88, 166, 255, 0.2) !important;
+        transition: all 0.3s ease !important;
+    }
+    div.stButton > button[kind="secondary"] *,
+    div.stButton > button[data-testid="baseButton-secondary"] * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+    }
+    div.stButton > button[kind="secondary"]:hover,
+    div.stButton > button[data-testid="baseButton-secondary"]:hover {
+        background: rgba(88, 166, 255, 0.25) !important;
+        transform: scale(1.05) !important;
+        box-shadow: 0 0 15px rgba(88, 166, 255, 0.4) !important;
+    }
+    
+    /* Global text color override for all landing page buttons */
+    div.stButton > button,
+    div.stButton > button * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
     # 1. Navbar
-    nc1, nc2, nc3, nc4, nc5 = st.columns([2.5, 4, 1.2, 1.2, 1.2])
+    nc1, nc2, nc3, nc4, nc5 = st.columns([2.5, 3.7, 1.2, 1.2, 1.2])
     with nc1:
         st.markdown("""
         <div class="logo-container" style="margin-top: 6px;">
@@ -280,7 +326,30 @@ def render_landing_page():
         </div>
         """, unsafe_allow_html=True)
     with nc3:
-        st.markdown('<a href="#features" style="display:inline-block; margin-top:14px; text-decoration:none; color:#94A3B8; font-weight:600; font-size:14px; transition:color 0.2s;" onmouseover="this.style.color=\'#ffffff\'" onmouseout="this.style.color=\'#94A3B8\'">Features</a>', unsafe_allow_html=True)
+        st.markdown("""
+        <a href="#features" style="
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            background: linear-gradient(135deg, #7c3aed, #a855f7);
+            border: none;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            transition: all 0.3s ease;
+            height: 38px;
+            margin-top: 4px;
+            box-shadow: 0 0 10px rgba(124, 58, 237, 0.4);
+        " onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 0 15px rgba(124, 58, 237, 0.6)';" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 0 10px rgba(124, 58, 237, 0.4)';">
+            Features
+        </a>
+        """, unsafe_allow_html=True)
     with nc4:
         if st.button("Login", key="nav_login", use_container_width=True):
             st.session_state["auth_page"] = "login"
@@ -291,22 +360,36 @@ def render_landing_page():
             st.rerun()
             
     # 2. Hero Section
-    st.markdown('<div class="hero-sec">', unsafe_allow_html=True)
-    st.markdown('<div class="hero-tagline" style="color:#F8FAFC;">Transform Your Sprints With AI-Powered Intelligence</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-subtext" style="color:#CBD5E1;">Plan smarter, predict risks, track team performance, identify blockers, and deliver successful sprints with AI assistance.</div>', unsafe_allow_html=True)
-    
-    _, center_hero, _ = st.columns([1.5, 1.0, 1.5])
-    with center_hero:
-        hc1, hc2 = st.columns(2)
-        with hc1:
-            if st.button("Sign Up", use_container_width=True, type="primary", key="hero_signup"):
-                st.session_state["auth_page"] = "signup"
-                st.rerun()
-        with hc2:
-            if st.button("Login", use_container_width=True, key="hero_login"):
-                st.session_state["auth_page"] = "login"
-                st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="hero-sec" style="padding: 80px 0 100px 0; text-align: center; max-width: 850px; margin: 0 auto;">
+        <div class="hero-tagline" style="
+            background: linear-gradient(135deg, #58a6ff 0%, #7c3aed 50%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-family: 'Outfit', sans-serif;
+            font-size: 58px;
+            font-weight: 800;
+            line-height: 1.15;
+            letter-spacing: -1.5px;
+            margin-bottom: 28px;
+            text-align: center;
+        ">
+            Transform Your Sprints<br>With AI-Powered Intelligence
+        </div>
+        <div class="hero-subtext" style="
+            color: #CBD5E1;
+            font-size: 19px;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+            text-align: center;
+            font-weight: 400;
+        ">
+            Plan smarter, predict risks, track team performance,<br>
+            identify blockers, and deliver successful sprints with AI assistance.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
     # 3. Features Section
     st.markdown('<div id="features" class="section-title">SprintAI Platform Features</div>', unsafe_allow_html=True)
@@ -345,13 +428,59 @@ def render_login_page():
     st.markdown("""
     <style>
     section.main { background: radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.12) 0%, #0d1117 100%) !important; }
+    
+    /* Highlight stForm border */
+    div[data-testid="stForm"] {
+        border: 1.5px solid rgba(88, 166, 255, 0.4) !important;
+        box-shadow: 0 0 15px rgba(88, 166, 255, 0.15) !important;
+        border-radius: 12px !important;
+        background: rgba(22, 27, 34, 0.45) !important;
+        margin-top: -1px !important;
+    }
+    
+    /* Make submit buttons glow */
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #ef4444, #f97316) !important;
+        color: #ffffff !important;
+        border: none !important;
+        font-weight: 700 !important;
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.45) !important;
+        transition: all 0.3s ease !important;
+    }
+    div.stButton > button[kind="primary"] * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    div.stButton > button[kind="primary"]:hover {
+        transform: scale(1.02) !important;
+        box-shadow: 0 0 18px rgba(239, 68, 68, 0.65) !important;
+    }
+    
+    /* Make back buttons and other secondary buttons brightly glowing */
+    div.stButton > button:not([kind="primary"]) {
+        background: rgba(88, 166, 255, 0.15) !important;
+        color: #ffffff !important;
+        border: 1px solid #58a6ff !important;
+        font-weight: 700 !important;
+        box-shadow: 0 0 10px rgba(88, 166, 255, 0.2) !important;
+        transition: all 0.3s ease !important;
+    }
+    div.stButton > button:not([kind="primary"]) * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    div.stButton > button:not([kind="primary"]):hover {
+        background: rgba(88, 166, 255, 0.25) !important;
+        transform: scale(1.02) !important;
+        box-shadow: 0 0 15px rgba(88, 166, 255, 0.4) !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
     # Wrap in centered container to avoid broad UI
     _, center_col, _ = st.columns([0.5, 2.0, 0.5])
     with center_col:
-        if st.button("← Back to Home"):
+        if st.button("← Back to Home", key="back_to_home_login"):
             st.session_state["auth_page"] = "landing"
             st.rerun()
             
@@ -359,10 +488,10 @@ def render_login_page():
         
         col1, col2 = st.columns([1, 1.1])
         with col1:
-            st.markdown('<div style="padding: 30px; background: rgba(30, 27, 75, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; height: 100%;"><div style="font-family: \'Outfit\', sans-serif; font-size: 32px; font-weight: 800; color: #ffffff; margin-bottom: 12px;">⚡ SprintAI</div><div style="color: #94a3b8; font-size: 14px; margin-bottom: 24px; line-height: 1.5;">Access your internal team workspace to participate in active sprint cycles and log daily metrics.</div><div style="margin-top: 20px;"><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">🤖</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">AI-Driven Assistant</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Assists scrum masters with analytics, forecasts, and risks.</div></div></div><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">📋</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">Team Workspace</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Visual boards, timeline updates, and progress reporting.</div></div></div></div></div>', unsafe_allow_html=True)
+            st.markdown('<div style="padding: 30px; background: rgba(30, 27, 75, 0.25); border: 1.5px solid rgba(99, 102, 241, 0.45); box-shadow: 0 0 15px rgba(99, 102, 241, 0.2); border-radius: 12px; height: 100%;"><div style="font-family: \'Outfit\', sans-serif; font-size: 32px; font-weight: 800; color: #ffffff; margin-bottom: 12px;">⚡ SprintAI</div><div style="color: #94a3b8; font-size: 14px; margin-bottom: 24px; line-height: 1.5;">Access your internal team workspace to participate in active sprint cycles and log daily metrics.</div><div style="margin-top: 20px;"><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">🤖</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">AI-Driven Assistant</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Assists scrum masters with analytics, forecasts, and risks.</div></div></div><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">📋</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">Team Workspace</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Visual boards, timeline updates, and progress reporting.</div></div></div></div></div>', unsafe_allow_html=True)
             
         with col2:
-            st.markdown('<div style="padding: 24px; background: rgba(22, 27, 34, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;"><div style="font-family: \'Outfit\', sans-serif; font-size: 24px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">Sign In</div><div style="color: #94a3b8; font-size: 12.5px;">Enter your login credentials below.</div></div>', unsafe_allow_html=True)
+            st.markdown('<div style="padding: 24px; background: rgba(22, 27, 34, 0.4); border: 1.5px solid rgba(88, 166, 255, 0.4); border-bottom: none; box-shadow: 0 -5px 15px rgba(88, 166, 255, 0.05); border-radius: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;"><div style="font-family: \'Outfit\', sans-serif; font-size: 24px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">Sign In</div><div style="color: #94a3b8; font-size: 12.5px;">Enter your login credentials below.</div></div>', unsafe_allow_html=True)
             with st.form("login_form_new"):
                 lu = st.text_input("Work Email Address", placeholder="name@company.com")
                 lp = st.text_input("Password", type="password", placeholder="Enter your password")
@@ -385,13 +514,59 @@ def render_signup_page():
     st.markdown("""
     <style>
     section.main { background: radial-gradient(circle at 70% 80%, rgba(124, 58, 237, 0.12) 0%, #0d1117 100%) !important; }
+    
+    /* Highlight stForm border */
+    div[data-testid="stForm"] {
+        border: 1.5px solid rgba(124, 58, 237, 0.55) !important;
+        box-shadow: 0 0 15px rgba(124, 58, 237, 0.2) !important;
+        border-radius: 12px !important;
+        background: rgba(22, 27, 34, 0.45) !important;
+        margin-top: -1px !important;
+    }
+    
+    /* Make submit buttons glow */
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #ef4444, #f97316) !important;
+        color: #ffffff !important;
+        border: none !important;
+        font-weight: 700 !important;
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.45) !important;
+        transition: all 0.3s ease !important;
+    }
+    div.stButton > button[kind="primary"] * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    div.stButton > button[kind="primary"]:hover {
+        transform: scale(1.02) !important;
+        box-shadow: 0 0 18px rgba(239, 68, 68, 0.65) !important;
+    }
+    
+    /* Make back buttons and other secondary buttons brightly glowing */
+    div.stButton > button:not([kind="primary"]) {
+        background: rgba(124, 58, 237, 0.15) !important;
+        color: #ffffff !important;
+        border: 1px solid #7c3aed !important;
+        font-weight: 700 !important;
+        box-shadow: 0 0 10px rgba(124, 58, 237, 0.2) !important;
+        transition: all 0.3s ease !important;
+    }
+    div.stButton > button:not([kind="primary"]) * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+    div.stButton > button:not([kind="primary"]):hover {
+        background: rgba(124, 58, 237, 0.25) !important;
+        transform: scale(1.02) !important;
+        box-shadow: 0 0 15px rgba(124, 58, 237, 0.4) !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
     # Wrap in centered container to avoid broad UI
     _, center_col, _ = st.columns([0.5, 2.0, 0.5])
     with center_col:
-        if st.button("← Back to Home"):
+        if st.button("← Back to Home", key="back_to_home_signup"):
             st.session_state["auth_page"] = "landing"
             st.rerun()
             
@@ -399,10 +574,10 @@ def render_signup_page():
         
         col1, col2 = st.columns([1, 1.1])
         with col1:
-            st.markdown('<div style="padding: 30px; background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.2); border-radius: 12px; height: 100%;"><div style="font-family: \'Outfit\', sans-serif; font-size: 32px; font-weight: 800; color: #ffffff; margin-bottom: 12px;">⚡ Join SprintAI</div><div style="color: #94a3b8; font-size: 14px; margin-bottom: 24px; line-height: 1.5;">Create an account to start managing sprints, logging updates, and utilizing AI-driven task risks.</div><div style="margin-top: 20px;"><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">🔑</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">Role-Based Account Setup</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Register as a Manager (project owner) or Member (collaborator).</div></div></div><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">📊</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">Predictive Insights Integration</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Automatically calculates velocity average & story points.</div></div></div></div></div>', unsafe_allow_html=True)
+            st.markdown('<div style="padding: 30px; background: rgba(124, 58, 237, 0.15); border: 1.5px solid rgba(124, 58, 237, 0.55); box-shadow: 0 0 15px rgba(124, 58, 237, 0.25); border-radius: 12px; height: 100%;"><div style="font-family: \'Outfit\', sans-serif; font-size: 32px; font-weight: 800; color: #ffffff; margin-bottom: 12px;">⚡ Join SprintAI</div><div style="color: #94a3b8; font-size: 14px; margin-bottom: 24px; line-height: 1.5;">Create an account to start managing sprints, logging updates, and utilizing AI-driven task risks.</div><div style="margin-top: 20px;"><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">🔑</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">Role-Based Account Setup</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Register as a Manager (project owner) or Member (collaborator).</div></div></div><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">📊</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">Predictive Insights Integration</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Automatically calculates velocity average & story points.</div></div></div></div></div>', unsafe_allow_html=True)
             
         with col2:
-            st.markdown('<div style="padding: 24px; background: rgba(22, 27, 34, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;"><div style="font-family: \'Outfit\', sans-serif; font-size: 24px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">Create Account</div><div style="color: #94a3b8; font-size: 12.5px;">Fill in details below to register.</div></div>', unsafe_allow_html=True)
+            st.markdown('<div style="padding: 24px; background: rgba(22, 27, 34, 0.4); border: 1.5px solid rgba(124, 58, 237, 0.55); border-bottom: none; box-shadow: 0 -5px 15px rgba(124, 58, 237, 0.05); border-radius: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;"><div style="font-family: \'Outfit\', sans-serif; font-size: 24px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">Create Account</div><div style="color: #94a3b8; font-size: 12.5px;">Fill in details below to register.</div></div>', unsafe_allow_html=True)
             with st.form("signup_form_new"):
                 sfn = st.text_input("Full Name", placeholder="e.g. John Doe")
                 su = st.text_input("Work Email Address", placeholder="name@company.com")
@@ -2101,6 +2276,91 @@ elif page == "Reports":
         if not openpyxl_installed:
             st.error("⚠️ The spreadsheet export engine (`openpyxl`) is missing. Please contact your system administrator to run `pip install openpyxl`.")
         else:
+            def style_worksheet(ws):
+                try:
+                    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+                    from openpyxl.utils import get_column_letter
+                    
+                    try:
+                        ws.views.sheetView[0].showGridLines = True
+                    except Exception:
+                        pass
+                        
+                    font_family = "Segoe UI"
+                    header_font = Font(name=font_family, size=11, bold=True, color="FFFFFF")
+                    cell_font = Font(name=font_family, size=10, color="000000")
+                    
+                    header_fill = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
+                    
+                    green_fill = PatternFill(start_color="E6F4EA", end_color="E6F4EA", fill_type="solid")
+                    green_font = Font(name=font_family, size=10, color="137333", bold=True)
+                    
+                    red_fill = PatternFill(start_color="FCE8E6", end_color="FCE8E6", fill_type="solid")
+                    red_font = Font(name=font_family, size=10, color="C5221F", bold=True)
+                    
+                    yellow_fill = PatternFill(start_color="FEF7E0", end_color="FEF7E0", fill_type="solid")
+                    yellow_font = Font(name=font_family, size=10, color="B06000", bold=True)
+                    
+                    blue_fill = PatternFill(start_color="E8F0FE", end_color="E8F0FE", fill_type="solid")
+                    blue_font = Font(name=font_family, size=10, color="1A73E8", bold=True)
+                    
+                    thin_border_side = Side(style='thin', color='E5E7EB')
+                    border = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
+                    
+                    center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                    left_align = Alignment(horizontal='left', vertical='center', wrap_text=True)
+                    right_align = Alignment(horizontal='right', vertical='center', wrap_text=True)
+                    
+                    if ws.max_row >= 1:
+                        for col in range(1, ws.max_column + 1):
+                            cell = ws.cell(row=1, column=col)
+                            cell.font = header_font
+                            cell.fill = header_fill
+                            cell.alignment = center_align
+                            cell.border = border
+                            
+                    for row in range(2, ws.max_row + 1):
+                        for col in range(1, ws.max_column + 1):
+                            cell = ws.cell(row=row, column=col)
+                            cell.font = cell_font
+                            cell.border = border
+                            
+                            val_str = str(cell.value or '').strip()
+                            if cell.value is not None and isinstance(cell.value, (int, float)):
+                                cell.alignment = right_align
+                            else:
+                                cell.alignment = left_align
+                                
+                            header_val = str(ws.cell(row=1, column=col).value or '').lower()
+                            if header_val in ('status', 'priority', 'risk', 'issue_type', 'blocked_tasks'):
+                                cell.alignment = center_align
+                                val_lower = val_str.lower()
+                                if val_lower in ('done', 'completed', 'active', 'low', 'task'):
+                                    cell.fill = green_fill
+                                    cell.font = green_font
+                                elif val_lower in ('blocked', 'critical', 'high', 'delayed', 'bug'):
+                                    cell.fill = red_fill
+                                    cell.font = red_font
+                                elif val_lower in ('in progress', 'medium', 'at_risk', 'story'):
+                                    cell.fill = yellow_fill
+                                    cell.font = yellow_font
+                                elif val_lower in ('todo', 'backlog', 'qa'):
+                                    cell.fill = blue_fill
+                                    cell.font = blue_font
+                                    
+                    for col in ws.columns:
+                        max_len = 0
+                        col_letter = get_column_letter(col[0].column)
+                        for cell in col[:100]:
+                            val_str = str(cell.value or '')
+                            lines = val_str.split('\n')
+                            for line in lines:
+                                if len(line) > max_len:
+                                    max_len = len(line)
+                        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+                except Exception:
+                    pass
+
             def generate_excel_data():
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
@@ -2168,6 +2428,10 @@ elif page == "Reports":
                         workload_info = pd.DataFrame([{"Message": "No team members registered for this project."}])
                     workload_info.to_excel(writer, sheet_name='Team Workload', index=False)
                     
+                    # Style all worksheets
+                    for name in writer.sheets:
+                        style_worksheet(writer.sheets[name])
+                        
                 buffer.seek(0)
                 return buffer.getvalue()
             
@@ -2244,6 +2508,10 @@ elif page == "Reports":
                                  member_logs['timestamp'] = member_logs['timestamp'].apply(lambda x: to_local_dt(x).strftime('%Y-%m-%d %H:%M:%S') if to_local_dt(x) else '')
                         member_logs.to_excel(writer, sheet_name='Daily Progress Logs', index=False)
                         
+                        # Style all worksheets
+                        for name in writer.sheets:
+                            style_worksheet(writer.sheets[name])
+                            
                     buffer.seek(0)
                     return buffer.getvalue()
                 
@@ -2289,7 +2557,7 @@ elif page == "Reports":
         st.divider(); st.markdown("**All Tasks**")
         sc4=["title","assignee_name","priority","status","story_points","estimated_hours","actual_hours"]
         st.dataframe(tdf7[[c for c in sc4 if c in tdf7.columns]].fillna("—"),use_container_width=True,hide_index=True)
-    st.caption("*Auto-generated · AI Sprint Manager · CVR College IOMP Batch 19*")
+    st.caption("*Auto-generated · AI Sprint Manager *")
     st.markdown('</div>',unsafe_allow_html=True)
 
 
