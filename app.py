@@ -4,6 +4,8 @@ CVR College of Engineering | IOMP Batch 19
 Run: streamlit run app.py
 """
 from zoneinfo import ZoneInfo
+from dotenv import load_dotenv
+load_dotenv()
 
 import streamlit as st
 import pandas as pd, numpy as np, sys, os, io
@@ -116,7 +118,9 @@ def verify_session_token(token):
 cookies = get_cookies()
 
 if "tab" not in st.session_state:
-    st.session_state.tab = cookies.get("session_tab", "Summary")
+    raw_tab = cookies.get("session_tab", "Dashboard")
+    tab_mapping = {"Summary": "Dashboard", "List": "Projects", "Daily Progress": "Daily Updates"}
+    st.session_state.tab = tab_mapping.get(raw_tab, raw_tab)
 
 if "user" not in st.session_state or "role" not in st.session_state or "user_name" not in st.session_state:
     st.session_state["user"] = None
@@ -134,241 +138,309 @@ if not st.session_state["user"] and not st.session_state.get("logout_triggered")
             st.session_state["user_name"] = data["name"]
             st.rerun()
 
+def render_landing_page():
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    html {
+        scroll-behavior: smooth !important;
+    }
+    
+    /* Landing page background & overrides */
+    section.main {
+        background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.15), transparent 40%),
+                    radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.1), transparent 40%),
+                    #0D1117 !important;
+        font-family: 'Inter', sans-serif !important;
+    }
+    
+    /* Custom container padding */
+    section.main > div.block-container {
+        padding: 40px 5% !important;
+        max-width: 1200px !important;
+        margin: 0 auto !important;
+    }
+    
+    .logo-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 26px;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: -0.5px;
+    }
+    .logo-glow {
+        background: linear-gradient(135deg, #58a6ff, #a855f7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        filter: drop-shadow(0 0 10px rgba(88, 166, 255, 0.4));
+    }
+    
+    /* Hero section */
+    .hero-sec {
+        text-align: center;
+        padding: 40px 0 60px 0;
+        max-width: 850px;
+        margin: 0 auto;
+    }
+    .hero-tagline {
+        background: linear-gradient(135deg, #58a6ff 0%, #7c3aed 50%, #a855f7 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-family: 'Outfit', sans-serif;
+        font-size: 58px;
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -1.5px;
+        margin-bottom: 24px;
+    }
+    .hero-subtext {
+        font-size: 17px;
+        color: #CBD5E1;
+        line-height: 1.6;
+        margin-bottom: 36px;
+        font-weight: 400;
+    }
+    
+    /* Feature Grid */
+    .section-title {
+        text-align: center;
+        font-family: 'Outfit', sans-serif;
+        font-size: 32px;
+        font-weight: 700;
+        color: #F8FAFC;
+        margin-top: 80px;
+        margin-bottom: 10px;
+        letter-spacing: -0.5px;
+    }
+    .section-subtitle {
+        text-align: center;
+        font-size: 14px;
+        color: #94A3B8;
+        margin-bottom: 44px;
+    }
+    .feat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        margin-bottom: 60px;
+    }
+    @media (max-width: 1024px) {
+        .feat-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (max-width: 600px) {
+        .feat-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .feat-card {
+        background: rgba(22, 27, 34, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 24px;
+        transition: all 0.3s ease;
+    }
+    .feat-card:hover {
+        transform: translateY(-4px);
+        background: rgba(22, 27, 34, 0.7);
+        border-color: #58a6ff !important;
+        box-shadow: 0 0 15px rgba(88, 166, 255, 0.25);
+    }
+    .feat-icon {
+        font-size: 26px;
+        margin-bottom: 14px;
+        display: inline-block;
+    }
+    .feat-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 17px;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 8px;
+    }
+    .feat-desc {
+        font-size: 13px;
+        color: #94A3B8;
+        line-height: 1.5;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # 1. Navbar
+    nc1, nc2, nc3, nc4, nc5 = st.columns([2.5, 4, 1.2, 1.2, 1.2])
+    with nc1:
+        st.markdown("""
+        <div class="logo-container" style="margin-top: 6px;">
+            <span>⚡</span><span class="logo-glow">SprintAI</span>
+        </div>
+        """, unsafe_allow_html=True)
+    with nc3:
+        st.markdown('<a href="#features" style="display:inline-block; margin-top:14px; text-decoration:none; color:#94A3B8; font-weight:600; font-size:14px; transition:color 0.2s;" onmouseover="this.style.color=\'#ffffff\'" onmouseout="this.style.color=\'#94A3B8\'">Features</a>', unsafe_allow_html=True)
+    with nc4:
+        if st.button("Login", key="nav_login", use_container_width=True):
+            st.session_state["auth_page"] = "login"
+            st.rerun()
+    with nc5:
+        if st.button("Sign Up", key="nav_signup", use_container_width=True, type="primary"):
+            st.session_state["auth_page"] = "signup"
+            st.rerun()
+            
+    # 2. Hero Section
+    st.markdown('<div class="hero-sec">', unsafe_allow_html=True)
+    st.markdown('<div class="hero-tagline" style="color:#F8FAFC;">Transform Your Sprints With AI-Powered Intelligence</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-subtext" style="color:#CBD5E1;">Plan smarter, predict risks, track team performance, identify blockers, and deliver successful sprints with AI assistance.</div>', unsafe_allow_html=True)
+    
+    _, center_hero, _ = st.columns([1.5, 1.0, 1.5])
+    with center_hero:
+        hc1, hc2 = st.columns(2)
+        with hc1:
+            if st.button("Sign Up", use_container_width=True, type="primary", key="hero_signup"):
+                st.session_state["auth_page"] = "signup"
+                st.rerun()
+        with hc2:
+            if st.button("Login", use_container_width=True, key="hero_login"):
+                st.session_state["auth_page"] = "login"
+                st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # 3. Features Section
+    st.markdown('<div id="features" class="section-title">SprintAI Platform Features</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">A comprehensive suite of tools built specifically for agile development team collaboration.</div>', unsafe_allow_html=True)
+    
+    features = [
+        ("🤖", "AI Sprint Planning", "Automatically analyze sprint workload and planning."),
+        ("📋", "Task Management", "Create, assign and track tasks efficiently."),
+        ("⚠️", "Risk Prediction", "Identify blockers and sprint risks early."),
+        ("📝", "Daily Updates", "Members submit daily work logs and blockers."),
+        ("👥", "Team Management", "Manage team members and assignments."),
+        ("📊", "Sprint Analytics", "Track velocity, completion rates and progress."),
+        ("🧠", "AI Insights", "Receive intelligent recommendations and health analysis."),
+        ("📄", "PDF Reports", "Generate detailed member, sprint and team reports."),
+        ("🚫", "Auto Blocker Detection", "Automatically identify stalled tasks."),
+        ("📈", "Velocity Tracking", "Monitor planned vs actual sprint performance."),
+        ("🎯", "Sprint Health Grading", "AI-generated sprint health scores and grades."),
+        ("📦", "Kanban Board", "Visual task management across sprint stages.")
+    ]
+    
+    cards_html = '<div class="feat-grid">'
+    for icon, title, desc in features:
+        cards_html += f'<div class="feat-card"><div class="feat-icon">{icon}</div><div class="feat-title">{title}</div><div class="feat-desc">{desc}</div></div>'
+    cards_html += '</div>'
+    st.markdown(cards_html, unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style="padding: 40px 0; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 80px; color: #8b949e; font-size: 12px;">
+        <div>⚡ SprintAI Agile Manager & Analytics Suite · CVR College of Engineering</div>
+        <div style="margin-top: 8px; font-size: 11px; color: #58a6ff;">Built for Agile Teams with Love.</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-def render_auth_gate():
-    # ADD THIS BELOW EXISTING CODE
-    # Premium visual design overrides specifically for the authentication gate
-    st.markdown(
-        """
-        <style>
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;800&display=swap');
-        
-        /* Premium Background Gradient & Grid Pattern */
-        section.main {
-            background: 
-                radial-gradient(circle at 50% 50%, rgba(30, 27, 75, 0.55) 0%, #0f172a 100%),
-                linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px) !important;
-            background-size: 100% 100%, 36px 36px, 36px 36px !important;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        /* Animated Background Glowing Blobs */
-        section.main::before, section.main::after {
-            content: "" !important;
-            position: absolute !important;
-            width: 350px !important;
-            height: 350px !important;
-            border-radius: 50% !important;
-            filter: blur(120px) !important;
-            z-index: 0 !important;
-            pointer-events: none !important;
-            opacity: 0.35 !important;
-        }
-        
-        section.main::before {
-            background: radial-gradient(circle, #4f46e5 0%, transparent 80%) !important;
-            top: 10% !important;
-            left: 15% !important;
-            animation: float-purple 15s infinite alternate ease-in-out !important;
-        }
-        
-        section.main::after {
-            background: radial-gradient(circle, #db2777 0%, transparent 80%) !important;
-            bottom: 10% !important;
-            right: 15% !important;
-            animation: float-pink 15s infinite alternate ease-in-out !important;
-        }
-        
-        @keyframes float-purple {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(80px, 50px) scale(1.2); }
-        }
-        
-        @keyframes float-pink {
-            0% { transform: translate(0, 0) scale(1); }
-            100% { transform: translate(-80px, -50px) scale(1.2); }
-        }
-        
-        /* Center container and restrict max-width */
-        section.main > div.block-container {
-            min-height: 100vh !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-            align-items: center !important;
-            padding-top: 0px !important;
-            z-index: 1 !important;
-        }
-        
-        /* Glassmorphic Tabs (Login/Signup Card) */
-        div.stTabs {
-            position: relative !important;
-            z-index: 2 !important;
-            background: rgba(15, 23, 42, 0.55) !important;
-            backdrop-filter: blur(24px) !important;
-            -webkit-backdrop-filter: blur(24px) !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
-            border-radius: 16px !important;
-            padding: 24px 32px 32px 32px !important;
-            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.5), 0 0 80px rgba(99, 102, 241, 0.12) !important;
-            width: 420px !important;
-            margin: 0 auto !important;
-        }
-        
-        /* Hide outer double-borders of the form */
-        div.stTabs form {
-            border: none !important;
-            padding: 0 !important;
-            background: transparent !important;
-        }
-        
-        /* Modern Segmented Tabs Controller */
-        div.stTabs [data-baseweb="tab-list"] {
-            background: rgba(255, 255, 255, 0.04) !important;
-            border-radius: 8px !important;
-            padding: 4px !important;
-            border-bottom: none !important;
-            margin-bottom: 24px !important;
-        }
-        div.stTabs [data-baseweb="tab"] {
-            flex: 1 !important;
-            text-align: center !important;
-            border-radius: 6px !important;
-            padding: 8px 12px !important;
-            font-size: 13px !important;
-            font-weight: 600 !important;
-            color: #94a3b8 !important;
-            background: transparent !important;
-            transition: all 0.2s ease !important;
-        }
-        div.stTabs [data-baseweb="tab"][aria-selected="true"] {
-            background: rgba(255, 255, 255, 0.08) !important;
-            color: #ffffff !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-        }
-        div.stTabs [data-baseweb="tab-highlight"] {
-            display: none !important;
-        }
-        
-        /* Custom Inputs */
-        div.stTabs input {
-            background: rgba(15, 23, 42, 0.4) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 8px !important;
-            color: #ffffff !important;
-            padding: 10px 14px !important;
-            font-size: 13px !important;
-            transition: all 0.25s ease !important;
-        }
-        div.stTabs input:focus {
-            border-color: #6366f1 !important;
-            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
-            background: rgba(15, 23, 42, 0.6) !important;
-        }
-        
-        /* Select dropdown styling */
-        div.stTabs div[data-baseweb="select"] > div {
-            background: rgba(15, 23, 42, 0.4) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 8px !important;
-            color: #ffffff !important;
-        }
-        
-        /* Gradient Button overrides */
-        div.stTabs button[kind="primary"] {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
-            color: #ffffff !important;
-            border: none !important;
-            border-radius: 8px !important;
-            padding: 12px 24px !important;
-            font-size: 14px !important;
-            font-weight: 600 !important;
-            letter-spacing: 0.5px !important;
-            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
-            transition: all 0.25s ease !important;
-            width: 100% !important;
-            margin-top: 14px !important;
-        }
-        div.stTabs button[kind="primary"]:hover {
-            transform: translateY(-1px) !important;
-            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.55) !important;
-        }
-        div.stTabs button[kind="primary"]:active {
-            transform: translateY(1px) !important;
-        }
-        
-        /* Glowing branding elements */
-        .auth-logo-glowing {
-            font-size: 52px;
-            text-align: center;
-            margin-bottom: 8px;
-            filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.75));
-            animation: logo-pulse 2s infinite alternate ease-in-out;
-        }
-        @keyframes logo-pulse {
-            0% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.5)); }
-            100% { transform: scale(1.06); filter: drop-shadow(0 0 16px rgba(99, 102, 241, 0.9)); }
-        }
-        .auth-title-center {
-            color: #ffffff;
-            font-family: 'Outfit', 'Inter', sans-serif;
-            font-size: 34px;
-            font-weight: 800;
-            text-align: center;
-            margin-bottom: 4px;
-            letter-spacing: -1.2px;
-            background: linear-gradient(135deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .auth-sub-center {
-            color: #94a3b8;
-            font-size: 13px;
-            text-align: center;
-            margin-bottom: 24px;
-            letter-spacing: 0.2px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    left, mid, right = st.columns([1, 1.15, 1])
-    with mid:
-        st.markdown(
-            '<div class="auth-brand">'
-            '<div class="auth-logo-glowing">⚡</div>'
-            '<div class="auth-title-center">SprintAI</div>'
-            '<div class="auth-sub-center">Agile Planning, Powered by AI</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        ltab, stab = st.tabs(["Login", "Signup"])
 
-        with ltab:
-            with st.form("login_form"):
-                lu = st.text_input("Email", placeholder="name@company.com")
+def render_login_page():
+    st.markdown("""
+    <style>
+    section.main { background: radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.12) 0%, #0d1117 100%) !important; }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Wrap in centered container to avoid broad UI
+    _, center_col, _ = st.columns([0.5, 2.0, 0.5])
+    with center_col:
+        if st.button("← Back to Home"):
+            st.session_state["auth_page"] = "landing"
+            st.rerun()
+            
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        
+        col1, col2 = st.columns([1, 1.1])
+        with col1:
+            st.markdown('<div style="padding: 30px; background: rgba(30, 27, 75, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; height: 100%;"><div style="font-family: \'Outfit\', sans-serif; font-size: 32px; font-weight: 800; color: #ffffff; margin-bottom: 12px;">⚡ SprintAI</div><div style="color: #94a3b8; font-size: 14px; margin-bottom: 24px; line-height: 1.5;">Access your internal team workspace to participate in active sprint cycles and log daily metrics.</div><div style="margin-top: 20px;"><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">🤖</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">AI-Driven Assistant</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Assists scrum masters with analytics, forecasts, and risks.</div></div></div><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">📋</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">Team Workspace</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Visual boards, timeline updates, and progress reporting.</div></div></div></div></div>', unsafe_allow_html=True)
+            
+        with col2:
+            st.markdown('<div style="padding: 24px; background: rgba(22, 27, 34, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;"><div style="font-family: \'Outfit\', sans-serif; font-size: 24px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">Sign In</div><div style="color: #94a3b8; font-size: 12.5px;">Enter your login credentials below.</div></div>', unsafe_allow_html=True)
+            with st.form("login_form_new"):
+                lu = st.text_input("Work Email Address", placeholder="name@company.com")
                 lp = st.text_input("Password", type="password", placeholder="Enter your password")
-                if st.form_submit_button("Login", type="primary", use_container_width=True):
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.form_submit_button("Sign In to Space", type="primary", use_container_width=True):
                     st.session_state["logout_triggered"] = False
                     ok, msg = login_user(lu, lp)
                     if ok:
                         st.success(msg)
                         st.rerun()
                     st.error(msg)
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown('<div style="text-align: center; font-size: 12px; color: #94a3b8; margin-bottom: 8px;">Don\'t have an account?</div>', unsafe_allow_html=True)
+            if st.button("Create a New Workspace Account", use_container_width=True):
+                st.session_state["auth_page"] = "signup"
+                st.rerun()
 
-        with stab:
-            with st.form("signup_form"):
-                su = st.text_input("Email", placeholder="name@company.com")
+
+def render_signup_page():
+    st.markdown("""
+    <style>
+    section.main { background: radial-gradient(circle at 70% 80%, rgba(124, 58, 237, 0.12) 0%, #0d1117 100%) !important; }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Wrap in centered container to avoid broad UI
+    _, center_col, _ = st.columns([0.5, 2.0, 0.5])
+    with center_col:
+        if st.button("← Back to Home"):
+            st.session_state["auth_page"] = "landing"
+            st.rerun()
+            
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        
+        col1, col2 = st.columns([1, 1.1])
+        with col1:
+            st.markdown('<div style="padding: 30px; background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.2); border-radius: 12px; height: 100%;"><div style="font-family: \'Outfit\', sans-serif; font-size: 32px; font-weight: 800; color: #ffffff; margin-bottom: 12px;">⚡ Join SprintAI</div><div style="color: #94a3b8; font-size: 14px; margin-bottom: 24px; line-height: 1.5;">Create an account to start managing sprints, logging updates, and utilizing AI-driven task risks.</div><div style="margin-top: 20px;"><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">🔑</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">Role-Based Account Setup</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Register as a Manager (project owner) or Member (collaborator).</div></div></div><div style="display:flex; gap:12px; margin-bottom:20px;"><div style="font-size: 20px;">📊</div><div><div style="font-weight: 600; color: #ffffff; font-size: 13.5px;">Predictive Insights Integration</div><div style="color: #94a3b8; font-size: 11.5px; margin-top: 2px;">Automatically calculates velocity average & story points.</div></div></div></div></div>', unsafe_allow_html=True)
+            
+        with col2:
+            st.markdown('<div style="padding: 24px; background: rgba(22, 27, 34, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; border-bottom-left-radius: 0; border-bottom-right-radius: 0;"><div style="font-family: \'Outfit\', sans-serif; font-size: 24px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">Create Account</div><div style="color: #94a3b8; font-size: 12.5px;">Fill in details below to register.</div></div>', unsafe_allow_html=True)
+            with st.form("signup_form_new"):
+                sfn = st.text_input("Full Name", placeholder="e.g. John Doe")
+                su = st.text_input("Work Email Address", placeholder="name@company.com")
                 sp = st.text_input("Create Password", type="password", placeholder="Minimum 8 characters")
-                sr = st.selectbox("Role", ["Member", "Manager"])
-                if st.form_submit_button("Create Account", type="primary", use_container_width=True):
-                    ok, msg = signup_user(su, sp, sr)
-                    if ok:
-                        st.success(msg)
+                sp_conf = st.text_input("Confirm Password", type="password", placeholder="Re-enter password")
+                sr = st.selectbox("Workspace Role", ["Member", "Manager"])
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.form_submit_button("Register Account", type="primary", use_container_width=True):
+                    if sp != sp_conf:
+                        st.error("Passwords do not match.")
+                    elif len(sp) < 8:
+                        st.error("Password must be at least 8 characters.")
                     else:
-                        st.error(msg)
+                        ok, msg = signup_user(su, sp, sr, full_name=sfn)
+                        if ok:
+                            st.success(msg)
+                            st.session_state["auth_page"] = "login"
+                            st.rerun()
+                        else:
+                            st.error(msg)
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown('<div style="text-align: center; font-size: 12px; color: #94a3b8; margin-bottom: 8px;">Already have an account?</div>', unsafe_allow_html=True)
+            if st.button("Sign In to Existing Workspace", use_container_width=True):
+                st.session_state["auth_page"] = "login"
+                st.rerun()
+
+
+def render_auth_gate():
+    if "auth_page" not in st.session_state:
+        st.session_state["auth_page"] = "landing"
+        
+    page = st.session_state["auth_page"]
+    if page == "landing":
+        render_landing_page()
+    elif page == "login":
+        render_login_page()
+    elif page == "signup":
+        render_signup_page()
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -450,6 +522,8 @@ div[data-testid="column"] .stButton>button.tab-btn {
 
 /* cards */
 .card                 { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px 18px; margin-bottom:12px; }
+.kpi-card             { background:rgba(22, 27, 34, 0.5); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:20px; position:relative; overflow:hidden; min-height:105px; box-shadow:0 4px 20px rgba(0,0,0,0.15); transition:all 0.3s ease; }
+.kpi-card:hover       { transform:translateY(-2px); border-color:rgba(88,166,255,0.25); }
 .sum-num              { font-size:28px; font-weight:700; }
 .sum-lbl              { font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
 
@@ -934,7 +1008,7 @@ with st.sidebar:
             st.caption(act_s.get("goal","") or "No goal set")
             st.progress(min(pct,1.0), text=f"{cp}/{pp} pts · {pct*100:.0f}%")
             # Auto-detection summary in sidebar (Phase 2 Cached Scan) - only run on metrics-heavy tabs
-            if st.session_state.get("tab") in ["Summary", "AI Insights", "Reports", "List", "Board"]:
+            if st.session_state.get("tab") in ["Dashboard", "AI Insights", "Reports", "Projects", "Board"]:
                 scan = get_sprint_scan_cached(int(act_s["id"]))
                 if scan["auto_blocked_count"] or scan["delayed_count"] or scan["at_risk_count"]:
                     st.markdown(f"""
@@ -975,9 +1049,9 @@ if not proj_id:
 # ══════════════════════════════════════════════════════════════════════════════
 #  TOP NAV — project header + clickable tabs
 # ══════════════════════════════════════════════════════════════════════════════
-TABS = ["Summary","List","Board","Sprints","Task Creation","Team","AI Insights","Reports","Daily Progress"]
-TAB_ICONS = {"Summary":"📊","List":"📋","Board":"🗂️","Sprints":"🏃",
-             "Task Creation":"🗒️","Team":"👥","AI Insights":"🔮","Reports":"📄","Daily Progress":"📝"}
+TABS = ["Dashboard","Projects","Board","Sprints","Task Creation","Team","AI Insights","Reports","Daily Updates","Settings"]
+TAB_ICONS = {"Dashboard":"📊","Projects":"📋","Board":"🗂️","Sprints":"🏃",
+             "Task Creation":"🗒️","Team":"👥","AI Insights":"🔮","Reports":"📄","Daily Updates":"📝","Settings":"⚙️"}
 
 # ── Project name above tabs (like Jira) ──────────────────────────────────────
 st.markdown(f"""
@@ -1015,7 +1089,7 @@ page = st.session_state.tab
 # ══════════════════════════════════════════════════════════════════════════════
 #  📊 SUMMARY
 # ══════════════════════════════════════════════════════════════════════════════
-if page == "Summary":
+if page == "Dashboard":
     st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
 
     act   = load_active(proj_id)
@@ -1048,22 +1122,49 @@ if page == "Summary":
             </div>""", unsafe_allow_html=True)
 
     # KPI row
-    k1,k2,k3,k4 = st.columns(4)
-    def kcard(col, num, label, color):
-        col.markdown(f'<div class="card"><div class="sum-num" style="color:{color}">{num}</div>'
-                     f'<div class="sum-lbl">{label}</div></div>', unsafe_allow_html=True)
-    kcard(k1, done,   "✅ Completed",   "#3fb950")
-    kcard(k2, inprog, "◑ In Progress",  "#58a6ff")
-    kcard(k3, todo,   "○ To Do",        "#8b949e")
-    kcard(k4, blk,    "✕ Blocked",      "#f85149")
-    # ADD THIS BELOW EXISTING CODE
-    st.markdown("**Task Counts (Pending / In Progress / Completed)**")
-    dc1, dc2, dc3 = st.columns(3)
-    dc1.metric("Pending", todo)
-    dc2.metric("In Progress", inprog)
-    dc3.metric("Completed", done)
+    if act:
+        hlth = compute_sprint_health(tasks, act)
+        health_grade = hlth["grade"]
+        health_score = hlth["score"]
+        health_color = {"A":"#3fb950","B":"#d29922","C":"#f0883e","D":"#f85149","F":"#f85149"}.get(health_grade, "#8b949e")
+        active_sprint_name = act["name"]
+    else:
+        health_grade = "—"
+        health_score = "0"
+        health_color = "#8b949e"
+        active_sprint_name = "No Active Sprint"
 
-    st.image(get_counts_bar_chart(todo, inprog, done), width=320)
+    k1, k2, k3, k4 = st.columns(4)
+    k1.markdown(f"""
+    <div class="kpi-card">
+        <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Total Tasks</div>
+        <div style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 700; color: #ffffff; margin-top: 8px;">{total}</div>
+        <div style="position: absolute; right: 15px; bottom: 15px; font-size: 26px; opacity: 0.25;">📋</div>
+    </div>
+    """, unsafe_allow_html=True)
+    k2.markdown(f"""
+    <div class="kpi-card">
+        <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Active Sprint</div>
+        <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 700; color: #3fb950; margin-top: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{active_sprint_name}</div>
+        <div style="position: absolute; right: 15px; bottom: 15px; font-size: 26px; opacity: 0.25;">🏃</div>
+    </div>
+    """, unsafe_allow_html=True)
+    k3.markdown(f"""
+    <div class="kpi-card">
+        <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Team Size</div>
+        <div style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 700; color: #58a6ff; margin-top: 8px;">{len(team)} <span style="font-size:14px; font-weight:400; color:#8b949e;">members</span></div>
+        <div style="position: absolute; right: 15px; bottom: 15px; font-size: 26px; opacity: 0.25;">👥</div>
+    </div>
+    """, unsafe_allow_html=True)
+    k4.markdown(f"""
+    <div class="kpi-card">
+        <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Sprint Health</div>
+        <div style="font-family: 'Outfit', sans-serif; font-size: 32px; font-weight: 700; color: {health_color}; margin-top: 8px;">{health_grade} <span style="font-size: 14px; font-weight: 400; color: #8b949e;">({health_score}/100)</span></div>
+        <div style="position: absolute; right: 15px; bottom: 15px; font-size: 26px; opacity: 0.25;">🔮</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     left, right = st.columns([1.4,1])
 
@@ -1232,7 +1333,7 @@ if page == "Summary":
 # ══════════════════════════════════════════════════════════════════════════════
 #  📋 LIST
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "List":
+elif page == "Projects":
     st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
     sdf=load_sprints(pid=proj_id); team=load_team(proj_id)
     act=load_active(proj_id)
@@ -1306,7 +1407,7 @@ elif page == "List":
             reason_html  = f'<div style="color:#d29922;font-size:10px;margin-top:2px">🤖 {reasons[0]}</div>' if reasons else ''
 
             st.markdown(
-                f'<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;padding:10px 12px;background:#0d1117;border:1px solid #21262d;border-top:none;border-left:3px solid {border_col};font-size:13px">'
+                f'<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:6px;padding:12px;background:rgba(22, 27, 34, 0.45);border:1px solid rgba(255, 255, 255, 0.05);border-radius:6px;margin-bottom:8px;border-left:3px solid {border_col};font-size:13px">'
                 f'<div style="color:#e6edf3;font-weight:500">{t["title"]}{blocker_html}{reason_html}</div>'
                 f'<div style="display:flex;align-items:center;gap:5px">{av_html(av,avc,18)} <span style="color:#8b949e;font-size:11px">{av}</span></div>'
                 f'<div>{pbadge(t["priority"])}</div>'
@@ -1416,22 +1517,38 @@ elif page == "Board":
                 det2=scan2.get(t["id"],{})
                 ab2=det2.get("auto_blocked",False); dr2=det2.get("delay_risk","none")
                 ai_reasons=det2.get("reasons",[])
-                bord_c="#e879f9" if ab2 else "#f85149" if dr2=="delayed" else "#d29922" if dr2=="at_risk" else "#3b82f640"
-                if ab2:   ai_banner='<div style="color:#e879f9;font-size:10px;margin-top:3px">🤖 AI: Auto-flagged as blocked</div>'
-                elif dr2=="delayed": ai_banner=f'<div style="color:#f85149;font-size:10px;margin-top:3px">⏰ Delayed ~{det2.get("delay_days",0)}d</div>'
-                elif dr2=="at_risk": ai_banner=f'<div style="color:#d29922;font-size:10px;margin-top:3px">⚠️ {ai_reasons[0] if ai_reasons else "At risk"}</div>'
-                else: ai_banner=""
-                blk_note=f'<div style="color:#f85149;font-size:10px;margin-top:3px;padding-top:3px;border-top:1px solid #30363d">⛔ {t["blocker_note"]}</div>' if t.get("blocker_note") else ""
+                
+                # AI Indicator Styling
+                if ab2:
+                    ai_banner='<div style="color:#e879f9;font-size:10.5px;margin-top:6px;font-weight:600;">🤖 AI: Auto-blocked</div>'
+                elif dr2=="delayed":
+                    ai_banner=f'<div style="color:#f85149;font-size:10.5px;margin-top:6px;font-weight:600;">⏰ Delayed ~{det2.get("delay_days",0)}d</div>'
+                elif dr2=="at_risk":
+                    ai_banner=f'<div style="color:#d29922;font-size:10.5px;margin-top:6px;font-weight:600;">⚠️ {ai_reasons[0] if ai_reasons else "At risk"}</div>'
+                else:
+                    ai_banner=""
+                
+                blk_note=f'<div style="color:#f85149;font-size:10.5px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);font-weight:600;">⛔ {t["blocker_note"]}</div>' if t.get("blocker_note") else ""
                 av=t.get("assignee_name") or "Unassigned"; avc=t.get("avatar_color") or "#8b949e"
-                st.markdown(
-                    f'<div style="background:#161b22;border:1px solid {bord_c};border-radius:6px;padding:10px 12px;margin-bottom:6px">'
-                    f'<div style="color:#e6edf3;font-weight:500;font-size:13px;margin-bottom:5px">{t["title"]}</div>'
-                    f'<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:5px">{pbadge(t["priority"])}<span class="badge s-todo" style="font-size:10px">{t["story_points"]}pt</span></div>'
-                    f'<div style="display:flex;align-items:center;gap:5px">{av_html(av,avc,18)} <span style="color:#8b949e;font-size:11px">{av}</span></div>'
-                    f'{ai_banner}{blk_note}'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
+                
+                # Priority Border Colors
+                p_c = {"Critical": "#f85149", "High": "#d29922", "Medium": "#58a6ff", "Low": "#8b949e"}.get(t["priority"], "#8b949e")
+                due_date_str = f' · 📅 {t["due_date"]}' if t.get("due_date") else ""
+                
+                st.markdown(f"""
+                <div class="card" style="border-left: 4px solid {p_c}; margin-bottom: 8px; padding: 12px 14px; background: rgba(22, 27, 34, 0.45); border-color: rgba(255, 255, 255, 0.05);">
+                    <div style="color:#e6edf3; font-weight:600; font-size:12.5px; line-height:1.4; margin-bottom:6px;">{t["title"]}</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            {av_html(av, avc, 18)}
+                            <span style="color:#8b949e; font-size:11px;">{av}</span>
+                        </div>
+                        <span style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:4px; padding:2px 6px; font-size:10px; color:#c9d1d9; font-weight:600;">{t["story_points"]}pt{due_date_str}</span>
+                    </div>
+                    {ai_banner}
+                    {blk_note}
+                </div>
+                """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -1479,15 +1596,30 @@ elif page == "Sprints":
         dp=int(s["completed_points"]); pp=int(s["planned_points"]); pct=dp/max(pp,1)*100
         icon={"Planning":"🔵","Active":"🟢","Completed":"✅"}.get(s["status"],"⚪")
         with st.expander(f"{icon} **{s['name']}**  ·  {s['status']}  ·  {dp}/{pp} pts  ·  {s['start_date']} → {s['end_date']}",expanded=(s["status"]=="Active")):
+            st.markdown(f"""
+            <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:16px; margin-bottom:16px;">
+                <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px;">
+                    <div>
+                        <span style="color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">Sprint Goal</span>
+                        <div style="color:#e6edf3; font-weight:500; font-size:14px; margin-top:4px;">{s.get('goal') or '—'}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">Duration</span>
+                        <div style="color:#e6edf3; font-weight:500; font-size:13.5px; margin-top:4px;">📅 {s['start_date']} to {s['end_date']}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
             el,er=st.columns([2,1])
             with el:
-                st.markdown(f"**Goal:** {s.get('goal') or '—'}"); st.progress(min(pct/100,1.0),text=f"{pct:.0f}% · {len(stask)} tasks")
+                st.progress(min(pct/100,1.0),text=f"{pct:.0f}% Completed · {len(stask)} tasks")
                 with st.form(f"es_{sid2}"):
                     c1,c2=st.columns(2)
                     en=c1.text_input("Name",value=s["name"]); eg=c1.text_input("Goal",value=s.get("goal") or "")
                     esd=c2.date_input("Start",value=pd.to_datetime(s["start_date"]).date()); eed=c2.date_input("End",value=pd.to_datetime(s["end_date"]).date())
                     ep=c2.number_input("Planned Pts",0,300,int(s["planned_points"] or 0))
-                    if st.form_submit_button("💾 Save"):
+                    if st.form_submit_button("💾 Save Changes"):
                           exe("UPDATE sprints SET name=%s,goal=%s,start_date=%s,end_date=%s,planned_points=%s WHERE id=%s",(en,eg,str(esd),str(eed),ep,sid2)); st.success("Updated!"); st.rerun()
             with er:
                 st.markdown("**Actions**")
@@ -2116,7 +2248,7 @@ elif page == "Reports":
 # ══════════════════════════════════════════════════════════════════════════════
 #  📝 DAILY PROGRESS
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "Daily Progress":
+elif page == "Daily Updates":
     st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
     st.markdown("### 📝 Daily Progress Logs")
     st.caption("Log daily progress, update hours, and track team status updates.")
@@ -2262,11 +2394,17 @@ elif page == "Daily Progress":
                     hours_info = f" · Time: **{log['hours_logged']}h**" if float(log["hours_logged"]) > 0 else ""
                     
                     st.markdown(f"""
-                    <div class="card" style="border-left: 3px solid #10b981;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <span style="font-size:11px; color:#8b949e;">🕒 {time_str}{sprint_info}{task_info}{hours_info}</span>
+                    <div style="position:relative; padding-left:30px; margin-bottom:16px;">
+                        <!-- Timeline Node -->
+                        <div style="position:absolute; left:0; top:4px; width:10px; height:10px; border-radius:50%; background:#10b981; box-shadow:0 0 8px #10b981aa; border:2px solid #0d1117; z-index:2;"></div>
+                        <div style="position:absolute; left:4px; top:14px; bottom:-16px; width:2px; background:#21262d; z-index:1;"></div>
+                        
+                        <div class="card" style="margin-bottom:0; background:rgba(22, 27, 34, 0.45); border-color:rgba(255,255,255,0.05); border-left: 3px solid #10b981;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <span style="font-size:11px; color:#8b949e;">🕒 {time_str}{sprint_info}{task_info}{hours_info}</span>
+                            </div>
+                            <p style="color:#e6edf3; font-size:13px; margin:0;">{log['comment_text']}</p>
                         </div>
-                        <p style="color:#e6edf3; font-size:13px; margin:0;">{log['comment_text']}</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
@@ -2387,16 +2525,87 @@ elif page == "Daily Progress":
                 hours_info = f" · Time Logged: **{log['hours_logged']}h**" if float(log["hours_logged"]) > 0 else ""
                 
                 st.markdown(f"""
-                <div class="card" style="border-left: 3px solid #3b82f6;">
-                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
-                        {av_html(m_name, m_color, 24)}
-                        <div>
-                            <span style="font-weight:600; color:#e6edf3; font-size:13px;">{m_name}</span>
-                            <span style="font-size:11px; color:#8b949e; margin-left:8px;">🕒 {time_str}{sprint_info}{task_info}{hours_info}</span>
+                <div style="position:relative; padding-left:30px; margin-bottom:16px;">
+                    <!-- Timeline Node -->
+                    <div style="position:absolute; left:0; top:4px; width:10px; height:10px; border-radius:50%; background:#3b82f6; box-shadow:0 0 8px #3b82f6aa; border:2px solid #0d1117; z-index:2;"></div>
+                    <div style="position:absolute; left:4px; top:14px; bottom:-16px; width:2px; background:#21262d; z-index:1;"></div>
+                    
+                    <div class="card" style="margin-bottom:0; background:rgba(22, 27, 34, 0.45); border-color:rgba(255,255,255,0.05); border-left:3px solid #3b82f6;">
+                        <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
+                            {av_html(m_name, m_color, 24)}
+                            <div>
+                                <span style="font-weight:600; color:#e6edf3; font-size:13px;">{m_name}</span>
+                                <span style="font-size:11px; color:#8b949e; margin-left:8px;">🕒 {time_str}{sprint_info}{task_info}{hours_info}</span>
+                            </div>
                         </div>
+                        <p style="color:#e6edf3; font-size:13px; margin:0; padding-left:34px;">{log['comment_text']}</p>
                     </div>
-                    <p style="color:#e6edf3; font-size:13px; margin:0; padding-left:34px;">{log['comment_text']}</p>
                 </div>
                 """, unsafe_allow_html=True)
                             
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ⚙️ SETTINGS
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Settings":
+    st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
+    st.markdown("### ⚙️ Workspace Settings")
+    st.caption("Manage your user profile details and project workspace settings.")
+    
+    role = st.session_state.get("role")
+    user_email = st.session_state.get("user")
+    user_name = st.session_state.get("user_name") or user_email.split("@")[0]
+    
+    tab_profile, tab_project = st.tabs(["👤 Profile Details", "📁 Project Workspace"])
+    
+    with tab_profile:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("#### Edit Profile Information")
+        with st.form("profile_edit_form"):
+            new_name = st.text_input("Full Name / Display Name", value=user_name)
+            st.text_input("Account Email (Read-Only)", value=user_email, disabled=True)
+            st.text_input("Workspace Role (Read-Only)", value=role, disabled=True)
+            
+            if st.form_submit_button("💾 Save Profile Changes", type="primary"):
+                if new_name.strip():
+                    st.session_state["user_name"] = new_name.strip()
+                    if proj_id:
+                        exe("UPDATE team_members SET name=%s WHERE LOWER(email) = LOWER(%s) AND project_id = %s", (new_name.strip(), user_email, proj_id))
+                    st.success("Profile details updated successfully!")
+                    st.rerun()
+                else:
+                    st.error("Display Name cannot be empty.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with tab_project:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("#### Edit Project Metadata")
+        if role != "Manager":
+            st.warning("⚠️ Only workspace Managers can edit project workspace settings.")
+        else:
+            if not proj_id:
+                st.info("No active project. Please create a project first.")
+            else:
+                proj_data = qry("SELECT name, description FROM projects WHERE id = %s", [proj_id])
+                if not proj_data.empty:
+                    cur_name = proj_data.iloc[0]["name"]
+                    cur_desc = proj_data.iloc[0]["description"] or ""
+                else:
+                    cur_name = proj_name
+                    cur_desc = ""
+                    
+                with st.form("project_edit_form"):
+                    new_proj_name = st.text_input("Project Name *", value=cur_name)
+                    new_proj_desc = st.text_area("Project Description", value=cur_desc, height=100)
+                    
+                    if st.form_submit_button("💾 Update Project Metadata", type="primary"):
+                        if new_proj_name.strip():
+                            exe("UPDATE projects SET name=%s, description=%s WHERE id=%s", (new_proj_name.strip(), new_proj_desc, proj_id))
+                            st.success("Project workspace updated successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Project Name cannot be empty.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
     st.markdown('</div>', unsafe_allow_html=True)

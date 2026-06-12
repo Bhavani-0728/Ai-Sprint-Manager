@@ -43,11 +43,12 @@ def _format_auth_error(exc, prefix="Operation failed"):
     return f"{prefix}: {err}"
 
 
-def signup_user(username, password, role="Member"):
+def signup_user(username, password, role="Member", full_name=None):
     # ADD THIS BELOW EXISTING CODE
     username = (username or "").strip()
     password = (password or "").strip()
     role = role if role in ("Manager", "Member") else "Member"
+    display_name = full_name.strip() if full_name and full_name.strip() else username
 
     if not username or not password:
         return False, "Username and password are required."
@@ -63,7 +64,7 @@ def signup_user(username, password, role="Member"):
             {
                 "email": username,
                 "password": password,
-                "options": {"data": {"role": role, "display_name": username}},
+                "options": {"data": {"role": role, "display_name": display_name, "full_name": display_name}},
             }
         )
         return True, "Signup successful. Please login."
