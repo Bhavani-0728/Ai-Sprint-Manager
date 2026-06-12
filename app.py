@@ -2027,6 +2027,18 @@ elif page == "AI Insights":
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "Reports":
     st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
+    
+    current_user = st.session_state.get("user")
+    if (
+        "last_report_user" not in st.session_state
+        or st.session_state.last_report_user != current_user
+    ):
+        st.session_state.last_report_user = current_user
+        st.session_state.reports_state = {
+            "sprint_name": None,
+            "generated": False
+        }
+
     sdf7=load_sprints(pid=proj_id)
     if sdf7.empty: st.info("No sprints yet."); st.markdown('</div>',unsafe_allow_html=True); st.stop()
 
