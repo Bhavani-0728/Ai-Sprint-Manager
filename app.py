@@ -1005,8 +1005,9 @@ for i, t in enumerate(TABS):
                 unsafe_allow_html=True)
         else:
             if st.button(label, key=f"tab_{t}", use_container_width=True):
-                st.session_state.tab = t
-                st.rerun()
+                if st.session_state.get("tab") != t:
+                    st.session_state.tab = t
+                    st.rerun()
 
 st.markdown('<div style="background:#30363d;height:1px;margin-bottom:0"></div>', unsafe_allow_html=True)
 
@@ -1111,27 +1112,16 @@ if page == "Summary":
         st.markdown('</div>', unsafe_allow_html=True)
 
     with right:
-        # ADD THIS BELOW EXISTING CODE
-        rule_insights = generate_insights(tasks)
-        blockers, blocker_warnings = detect_blockers(tasks)
-        if rule_insights:
-            st.markdown("**🧠 Rule-Based AI Insights**")
-            for ins in rule_insights[:3]:
-                st.markdown(f'<div class="rc rc-info">💡 {ins}</div>', unsafe_allow_html=True)
-        if blocker_warnings:
-            st.markdown("**🚧 Blocker Warnings**")
-            for bw in blocker_warnings[:3]:
-                st.markdown(f'<div class="rc rc-warn">⚠️ {bw}</div>', unsafe_allow_html=True)
-
-        # AI sprint intelligence
+        # AI sprint intelligence (Slimmed)
         if act:
             hlth  = compute_sprint_health(tasks,act)
             s_risk= risk_det.assess_sprint_risk(act,tasks)
-            vl    = mets["velocity"].tolist() if not mets.empty else [30,35,38,40]
-            vfc   = vel_fc.forecast(vl)
-            recs  = rec_eng.generate(s_risk,tasks,vfc,team.to_dict("records"))
             gc    = {"A":"#3fb950","B":"#d29922","C":"#f0883e","D":"#f85149","F":"#f85149"}.get(hlth["grade"],"#8b949e")
             rc    = {"low":"#3fb950","medium":"#d29922","high":"#f85149"}[s_risk["level"]]
+
+            pp = act["planned_points"]
+            cp = act["completed_points"]
+            pct_cp = cp / max(pp, 1)
 
             st.markdown(f"""
             <div class="card" style="margin-bottom:10px">
@@ -1147,8 +1137,8 @@ if page == "Summary":
                   <div style="color:#8b949e;font-size:10px">Sprint Risk</div>
                 </div>
                 <div style="background:#21262d;border-radius:6px;padding:10px;text-align:center">
-                  <div style="color:#58a6ff;font-size:13px;font-weight:700">{vfc['forecast']}pt</div>
-                  <div style="color:#8b949e;font-size:10px">Vel. Forecast</div>
+                  <div style="color:#58a6ff;font-size:13px;font-weight:700">{pct_cp*100:.0f}%</div>
+                  <div style="color:#8b949e;font-size:10px">Completed Pts</div>
                 </div>
                 <div style="background:#21262d;border-radius:6px;padding:10px;text-align:center">
                   <div style="color:#{'f85149' if blk>0 else '3fb950'};font-size:13px;font-weight:700">{blk}</div>
@@ -1157,10 +1147,13 @@ if page == "Summary":
               </div>
             </div>""", unsafe_allow_html=True)
 
-            rc_map={"warning":"rc-warn","caution":"rc-caut","action":"rc-act","info":"rc-info","success":"rc-ok"}
-            st.markdown("**🔔 Recommendations**")
-            for r in recs[:3]:
-                st.markdown(f'<div class="rc {rc_map.get(r["type"],"rc-info")}"><strong>{r["icon"]} {r["title"]}</strong><br><span style="color:#8b949e">{r["body"]}</span></div>',unsafe_allow_html=True)
+            st.markdown("**🔔 Recommendation**")
+            if blk > 0:
+                st.markdown('<div class="rc rc-warn"><strong>⚠️ Too many blocked tasks detected</strong><br><span style="color:#8b949e">Address active blockers immediately to unblock team members.</span></div>', unsafe_allow_html=True)
+            elif s_risk["level"] == "high":
+                st.markdown('<div class="rc rc-act"><strong>💡 Reassign backend tasks</strong><br><span style="color:#8b949e">Workload is highly unbalanced. Reassign tasks to high-velocity members.</span></div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="rc rc-ok"><strong>✅ Sprint on track</strong><br><span style="color:#8b949e">No blockers or high risk detected. Keep up the good work!</span></div>', unsafe_allow_html=True)
 
         # Activity feed
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -1318,26 +1311,6 @@ elif page == "List":
                 unsafe_allow_html=True
             )
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        with st.expander("✏️ Edit a Task"):
-            opts2=member_opts(team)
-            with st.form("le"):
-                sel_t=st.selectbox("Task",all_t["title"].tolist())
-                trow=all_t[all_t["title"]==sel_t].iloc[0]
-                lc1,lc2,lc3=st.columns(3)
-                ns=lc1.selectbox("Status",["Todo","In Progress","Done","Blocked"],index=["Todo","In Progress","Done","Blocked"].index(trow["status"]))
-                np2=lc2.selectbox("Priority",["Low","Medium","High","Critical"],index=["Low","Medium","High","Critical"].index(trow["priority"]))
-                na=lc3.selectbox("Assignee",list(opts2.keys()),format_func=lambda x:opts2[x])
-                nah=st.number_input("Actual Hours",0.0,200.0,float(trow.get("actual_hours") or 0.0),step=0.5)
-                nbl=st.text_input("Blocker Note",value=trow.get("blocker_note") or "")
-                if st.form_submit_button("💾 Save",type="primary"):
-                    exe("UPDATE tasks SET status=%s,priority=%s,assignee_id=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-                        (ns,np2,na,nah or None,nbl or None,int(trow["id"])))
-                    if ns!=trow["status"] and trow.get("sprint_id"):
-                        if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(int(trow["story_points"]),int(trow["sprint_id"])))
-                        elif trow["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(trow["story_points"]),int(trow["sprint_id"])))
-                    log_activity(proj_id,opts2.get(na,"User").split(" (")[0],"updated",trow["title"],"status",trow["status"],int(trow["id"]),trow.get("sprint_id"),trow["title"])
-                    st.success("Saved!"); st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -1353,6 +1326,9 @@ elif page == "Board":
     def_idx=next((i for i,s in enumerate(sdf["status"]) if s=="Active"),0)
     sel=st.selectbox("Sprint",names,index=def_idx)
     srow=sdf[sdf["name"]==sel].iloc[0]; sid=int(srow["id"])
+    if "board_sprint_id" not in st.session_state or st.session_state.board_sprint_id != sid:
+        st.session_state.board_sprint_id = sid
+        st.session_state.board_limits = {"Todo": 20, "In Progress": 20, "Done": 20, "Blocked": 20}
     st.caption(f"📅 {srow['start_date']} → {srow['end_date']}  ·  Status: **{srow['status']}**  ·  Goal: *{srow.get('goal') or '—'}*")
 
     tdf=load_tasks(sprint_id=sid); tasks=tdf.to_dict("records")
@@ -1412,7 +1388,10 @@ elif page == "Board":
             if not col_t:
                 st.markdown('<div style="color:#30363d;text-align:center;padding:28px;font-size:12px;border:1px dashed #21262d;border-radius:6px">— empty —</div>',unsafe_allow_html=True)
 
-            for t in col_t:
+            limit = st.session_state.board_limits.get(status, 20)
+            displayed_tasks = col_t[:limit]
+
+            for t in displayed_tasks:
                 det2=scan2.get(t["id"],{})
                 ab2=det2.get("auto_blocked",False); dr2=det2.get("delay_risk","none")
                 ai_reasons=det2.get("reasons",[])
@@ -1432,6 +1411,11 @@ elif page == "Board":
                     f'</div>',
                     unsafe_allow_html=True
                 )
+
+            if len(col_t) > limit:
+                if st.button(f"Show More (+{len(col_t) - limit})", key=f"more_{status}_{sid}", use_container_width=True):
+                    st.session_state.board_limits[status] = limit + 20
+                    st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -1482,13 +1466,36 @@ elif page == "Sprints":
             el,er=st.columns([2,1])
             with el:
                 st.markdown(f"**Goal:** {s.get('goal') or '—'}"); st.progress(min(pct/100,1.0),text=f"{pct:.0f}% · {len(stask)} tasks")
-                with st.form(f"es_{sid2}"):
-                    c1,c2=st.columns(2)
-                    en=c1.text_input("Name",value=s["name"]); eg=c1.text_input("Goal",value=s.get("goal") or "")
-                    esd=c2.date_input("Start",value=pd.to_datetime(s["start_date"]).date()); eed=c2.date_input("End",value=pd.to_datetime(s["end_date"]).date())
-                    ep=c2.number_input("Planned Pts",0,300,int(s["planned_points"] or 0))
-                    if st.form_submit_button("💾 Save"):
-                          exe("UPDATE sprints SET name=%s,goal=%s,start_date=%s,end_date=%s,planned_points=%s WHERE id=%s",(en,eg,str(esd),str(eed),ep,sid2)); st.success("Updated!"); st.rerun()
+                if st.session_state.get("role") == "Manager":
+                    with st.form(f"es_{sid2}"):
+                        c1,c2=st.columns(2)
+                        en=c1.text_input("Name",value=s["name"]); eg=c1.text_input("Goal",value=s.get("goal") or "")
+                        esd=c2.date_input("Start",value=pd.to_datetime(s["start_date"]).date()); eed=c2.date_input("End",value=pd.to_datetime(s["end_date"]).date())
+                        ep=c2.number_input("Planned Pts",0,300,int(s["planned_points"] or 0))
+                        if st.form_submit_button("💾 Save"):
+                              exe("UPDATE sprints SET name=%s,goal=%s,start_date=%s,end_date=%s,planned_points=%s WHERE id=%s",(en,eg,str(esd),str(eed),ep,sid2)); st.success("Updated!"); st.rerun()
+                else:
+                    st.markdown(
+                        f"""
+                        <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;margin-top:10px">
+                            <table style="width:100%;border-collapse:collapse;color:#c9d1d9;font-size:13px">
+                                <tr>
+                                    <td style="padding:4px 0;color:#8b949e">Start Date:</td>
+                                    <td style="padding:4px 0;font-weight:500">{s['start_date']}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:4px 0;color:#8b949e">End Date:</td>
+                                    <td style="padding:4px 0;font-weight:500">{s['end_date']}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:4px 0;color:#8b949e">Planned Points:</td>
+                                    <td style="padding:4px 0;font-weight:500">{s['planned_points']} pts</td>
+                                </tr>
+                            </table>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
             with er:
                 st.markdown("**Actions**")
                 if st.session_state.get("role") == "Manager":
@@ -1509,7 +1516,10 @@ elif page == "Sprints":
                 else:
                     st.caption("Member access: sprint actions are restricted.")
             st.divider(); st.markdown("**📥 Add Backlog Tasks**")
-            backlog=qry("SELECT id,title,priority,story_points FROM tasks WHERE project_id=%s AND (sprint_id IS NULL OR sprint_id=0)",[proj_id])
+            if not all_project_tasks.empty:
+                backlog = all_project_tasks[all_project_tasks["sprint_id"].isna() | (all_project_tasks["sprint_id"] == 0) | (all_project_tasks["sprint_id"] == None)]
+            else:
+                backlog = pd.DataFrame()
             if backlog.empty: st.caption("No unassigned tasks.")
             else:
                 if st.session_state.get("role") == "Manager":
@@ -1609,34 +1619,68 @@ elif page == "Task Creation":
                     st.markdown(f"**Est:** {t.get('estimated_hours') or '—'}h · **Actual:** {t.get('actual_hours') or '—'}h")
                     if t.get("blocker_note"): st.error(f"⛔ {t['blocker_note']}")
                 with dc2:
-                    with st.form(f"te_{t['id']}"):
-                        e_t=st.text_input("Title",value=t["title"],key=f"ett_{t['id']}")
-                        e_s=st.selectbox("Status",["Todo","In Progress","Done","Blocked"],index=["Todo","In Progress","Done","Blocked"].index(t["status"]),key=f"ets_{t['id']}")
-                        e_p=st.selectbox("Priority",["Low","Medium","High","Critical"],index=["Low","Medium","High","Critical"].index(t["priority"]),key=f"etp_{t['id']}")
-                        e_a=st.selectbox("Assignee",list(opts2.keys()),format_func=lambda x:opts2[x],index=list(opts2.keys()).index(t["assignee_id"]) if t["assignee_id"] in list(opts2.keys()) else 0,key=f"eta_{t['id']}")
-                        e_sp2=st.selectbox("Pts",[1,2,3,5,8,13],index=[1,2,3,5,8,13].index(int(t["story_points"])) if int(t["story_points"]) in [1,2,3,5,8,13] else 2,key=f"etsp_{t['id']}")
-                        e_eh=st.number_input("Est.h",0.5,200.0,float(t.get("estimated_hours") or 2.0),step=0.5,key=f"eteh_{t['id']}")
-                        e_ah=st.number_input("Act.h",0.0,200.0,float(t.get("actual_hours") or 0.0),step=0.5,key=f"etah_{t['id']}")
-                        e_bl=st.text_input("Blocker",value=t.get("blocker_note") or "",key=f"etbl_{t['id']}")
+                    if st.session_state.get("role") == "Manager":
+                        with st.form(f"te_{t['id']}"):
+                            e_t=st.text_input("Title",value=t["title"],key=f"ett_{t['id']}")
+                            e_s=st.selectbox("Status",["Todo","In Progress","Done","Blocked"],index=["Todo","In Progress","Done","Blocked"].index(t["status"]),key=f"ets_{t['id']}")
+                            e_p=st.selectbox("Priority",["Low","Medium","High","Critical"],index=["Low","Medium","High","Critical"].index(t["priority"]),key=f"etp_{t['id']}")
+                            e_a=st.selectbox("Assignee",list(opts2.keys()),format_func=lambda x:opts2[x],index=list(opts2.keys()).index(t["assignee_id"]) if t["assignee_id"] in list(opts2.keys()) else 0,key=f"eta_{t['id']}")
+                            e_sp2=st.selectbox("Pts",[1,2,3,5,8,13],index=[1,2,3,5,8,13].index(int(t["story_points"])) if int(t["story_points"]) in [1,2,3,5,8,13] else 2,key=f"etsp_{t['id']}")
+                            e_eh=st.number_input("Est.h",0.5,200.0,float(t.get("estimated_hours") or 2.0),step=0.5,key=f"eteh_{t['id']}")
+                            e_ah=st.number_input("Act.h",0.0,200.0,float(t.get("actual_hours") or 0.0),step=0.5,key=f"etah_{t['id']}")
+                            e_bl=st.text_input("Blocker",value=t.get("blocker_note") or "",key=f"etbl_{t['id']}")
+                            sp_map={None:"— Backlog —"};sp_map.update({r["id"]:r["name"] for _,r in sdf.iterrows()} if not sdf.empty else {})
+                            cur_spr=t["sprint_id"] if t["sprint_id"] in list(sp_map.keys()) else None
+                            e_spr2=st.selectbox("Sprint",list(sp_map.keys()),format_func=lambda x:sp_map[x],index=list(sp_map.keys()).index(cur_spr),key=f"etspr_{t['id']}")
+                            sv,dl=st.columns(2)
+                            if sv.form_submit_button("💾",type="primary"):
+                                old_pts=int(t["story_points"])
+                                exe("UPDATE tasks SET title=%s,status=%s,priority=%s,assignee_id=%s,story_points=%s,estimated_hours=%s,actual_hours=%s,blocker_note=%s,sprint_id=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+                                    (e_t,e_s,e_p,e_a,e_sp2,e_eh,e_ah or None,e_bl or None,e_spr2,int(t["id"])))
+                                if t.get("sprint_id") and t["sprint_id"]!=e_spr2: exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(old_pts,int(t["sprint_id"])))
+                                if e_spr2 and e_spr2!=t.get("sprint_id"): exe("UPDATE sprints SET planned_points=planned_points+%s WHERE id=%s",(e_sp2,e_spr2))
+                                if e_s=="Done" and t["status"]!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(e_sp2,e_spr2))
+                                elif t["status"]=="Done" and e_s!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(e_sp2,e_spr2))
+                                log_activity(proj_id,opts2.get(e_a,"User").split(" (")[0],"updated",e_t,"status",t["status"],int(t["id"]),e_spr2,e_t)
+                                st.success("Saved!"); st.rerun()
+                            if dl.form_submit_button("🗑️"):
+                                if t.get("sprint_id"):
+                                    exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(int(t["story_points"]),int(t["sprint_id"])))
+                                    if t["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(t["story_points"]),int(t["sprint_id"])))
+                                exe("DELETE FROM tasks WHERE id=%s",(int(t["id"]),)); st.success("Deleted."); st.rerun()
+                    else:
                         sp_map={None:"— Backlog —"};sp_map.update({r["id"]:r["name"] for _,r in sdf.iterrows()} if not sdf.empty else {})
                         cur_spr=t["sprint_id"] if t["sprint_id"] in list(sp_map.keys()) else None
-                        e_spr2=st.selectbox("Sprint",list(sp_map.keys()),format_func=lambda x:sp_map[x],index=list(sp_map.keys()).index(cur_spr),key=f"etspr_{t['id']}")
-                        sv,dl=st.columns(2)
-                        if sv.form_submit_button("💾",type="primary"):
-                            old_pts=int(t["story_points"])
-                            exe("UPDATE tasks SET title=%s,status=%s,priority=%s,assignee_id=%s,story_points=%s,estimated_hours=%s,actual_hours=%s,blocker_note=%s,sprint_id=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-                                (e_t,e_s,e_p,e_a,e_sp2,e_eh,e_ah or None,e_bl or None,e_spr2,int(t["id"])))
-                            if t.get("sprint_id") and t["sprint_id"]!=e_spr2: exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(old_pts,int(t["sprint_id"])))
-                            if e_spr2 and e_spr2!=t.get("sprint_id"): exe("UPDATE sprints SET planned_points=planned_points+%s WHERE id=%s",(e_sp2,e_spr2))
-                            if e_s=="Done" and t["status"]!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(e_sp2,e_spr2))
-                            elif t["status"]=="Done" and e_s!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(e_sp2,e_spr2))
-                            log_activity(proj_id,opts2.get(e_a,"User").split(" (")[0],"updated",e_t,"status",t["status"],int(t["id"]),e_spr2,e_t)
-                            st.success("Saved!"); st.rerun()
-                        if dl.form_submit_button("🗑️"):
-                            if t.get("sprint_id"):
-                                exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(int(t["story_points"]),int(t["sprint_id"])))
-                                if t["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(t["story_points"]),int(t["sprint_id"])))
-                            exe("DELETE FROM tasks WHERE id=%s",(int(t["id"]),)); st.success("Deleted."); st.rerun()
+                        spr_name = sp_map.get(cur_spr, "— Backlog —")
+                        st.markdown(
+                            f"""
+                            <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px">
+                                <table style="width:100%;border-collapse:collapse;color:#c9d1d9;font-size:13px">
+                                    <tr>
+                                        <td style="padding:4px 0;color:#8b949e">Sprint:</td>
+                                        <td style="padding:4px 0;font-weight:500">{spr_name}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:4px 0;color:#8b949e">Status:</td>
+                                        <td style="padding:4px 0;font-weight:500">{t['status']}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:4px 0;color:#8b949e">Priority:</td>
+                                        <td style="padding:4px 0;font-weight:500">{t['priority']}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:4px 0;color:#8b949e">Assignee:</td>
+                                        <td style="padding:4px 0;font-weight:500">{av_txt}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:4px 0;color:#8b949e">Story Points:</td>
+                                        <td style="padding:4px 0;font-weight:500">{t['story_points']} pt</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
     st.markdown('</div>',unsafe_allow_html=True)
 
 
@@ -1645,37 +1689,41 @@ elif page == "Task Creation":
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "Team":
     st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
-    team=load_team(proj_id); act=load_active(proj_id); tdf=load_tasks(sprint_id=act["id"]) if act else pd.DataFrame()
+    team_df=load_team(proj_id)
+    all_tasks=load_tasks(project_id=proj_id)
+    act=load_active(proj_id)
+    tasks_df=all_tasks[all_tasks["sprint_id"] == int(act["id"])] if (act and not all_tasks.empty) else pd.DataFrame()
     ROLES=["Frontend Developer","Backend Developer","Full Stack Developer","ML Engineer","Data Scientist","DevOps Engineer","QA Engineer","Scrum Master","Product Owner","Tech Lead"]
     AVCOLS=["#ec4899","#3b82f6","#10b981","#f59e0b","#8b5cf6","#06b6d4","#f43f5e","#84cc16"]
 
-    with st.expander("➕ Add Team Member",expanded=team.empty):
-        with st.form("am", clear_on_submit=True):
-            mc1,mc2,mc3,mc4=st.columns(4)
-            mn=mc1.text_input("Full Name *"); me=mc2.text_input("Email *"); mr=mc3.selectbox("Role",ROLES); mv=mc4.number_input("Velocity",1.0,60.0,12.0,step=0.5)
-            if st.form_submit_button("➕ Add",type="primary"):
-                if not mn.strip(): st.error("Name required.")
-                elif not me.strip(): st.error("Email required.")
-                elif not team.empty and mn.strip() in team["name"].tolist(): st.error("Name already exists.")
-                elif not team.empty and me.strip() in team["email"].fillna("").tolist(): st.error("Email already exists.")
-                else:
-                    col2=AVCOLS[len(team)%len(AVCOLS)]
-                    exe("INSERT INTO team_members(name,role,velocity_avg,project_id,avatar_color,email)VALUES(%s,%s,%s,%s,%s,%s)",(mn.strip(),mr,mv,proj_id,col2,me.strip()))
-                    log_activity(proj_id,mn.strip(),"joined team"); st.success(f"✅ {mn} added!"); st.rerun()
+    if st.session_state.get("role") == "Manager":
+        with st.expander("➕ Add Team Member",expanded=team_df.empty):
+            with st.form("am", clear_on_submit=True):
+                mc1,mc2,mc3,mc4=st.columns(4)
+                mn=mc1.text_input("Full Name *"); me=mc2.text_input("Email *"); mr=mc3.selectbox("Role",ROLES); mv=mc4.number_input("Velocity",1.0,60.0,12.0,step=0.5)
+                if st.form_submit_button("➕ Add",type="primary"):
+                    if not mn.strip(): st.error("Name required.")
+                    elif not me.strip(): st.error("Email required.")
+                    elif not team_df.empty and mn.strip() in team_df["name"].tolist(): st.error("Name already exists.")
+                    elif not team_df.empty and me.strip() in team_df["email"].fillna("").tolist(): st.error("Email already exists.")
+                    else:
+                        col2=AVCOLS[len(team_df)%len(AVCOLS)]
+                        exe("INSERT INTO team_members(name,role,velocity_avg,project_id,avatar_color,email)VALUES(%s,%s,%s,%s,%s,%s)",(mn.strip(),mr,mv,proj_id,col2,me.strip()))
+                        log_activity(proj_id,mn.strip(),"joined team"); st.success(f"✅ {mn} added!"); st.rerun()
 
     st.divider()
-    if team.empty: st.info("No team members yet."); st.markdown('</div>',unsafe_allow_html=True); st.stop()
+    if team_df.empty: st.info("No team members yet."); st.markdown('</div>',unsafe_allow_html=True); st.stop()
 
     rows=[]
-    for _,m in team.iterrows():
-        mt=tdf[tdf["assignee_id"]==m["id"]] if not tdf.empty else pd.DataFrame()
+    for _,m in team_df.iterrows():
+        mt=tasks_df[tasks_df["assignee_id"]==m["id"]] if not tasks_df.empty else pd.DataFrame()
         rows.append({"Name":m["name"],"Email":m.get("email") or "—","Role":m["role"],"Velocity":m["velocity_avg"],"Sprint Tasks":len(mt),
                      "Done":len(mt[mt["status"]=="Done"]) if not mt.empty else 0,"Blocked":len(mt[mt["status"]=="Blocked"]) if not mt.empty else 0})
     st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
     st.divider()
 
-    for i,(_,m) in enumerate(team.iterrows()):
-        avc=m.get("avatar_color","#3b82f6"); mt=tdf[tdf["assignee_id"]==m["id"]] if not tdf.empty else pd.DataFrame()
+    for i,(_,m) in enumerate(team_df.iterrows()):
+        avc=m.get("avatar_color","#3b82f6"); mt=tasks_df[tasks_df["assignee_id"]==m["id"]] if not tasks_df.empty else pd.DataFrame()
         with st.expander(f"  **{m['name']}**  ·  {m['role']}  ·  ⚡ {m['velocity_avg']}pt",expanded=False):
             ec1,ec2=st.columns([1.5,1])
             with ec1:
@@ -1684,16 +1732,39 @@ elif page == "Team":
                     st.dataframe(mt[[c for c in sc3 if c in mt.columns]].fillna("—"),use_container_width=True,hide_index=True)
                 else: st.caption("No tasks this sprint.")
             with ec2:
-                with st.form(f"em_{m['id']}"):
-                    en2=st.text_input("Name",value=m["name"])
-                    ee2=st.text_input("Email",value=m.get("email") or "")
-                    er2=st.selectbox("Role",ROLES,index=ROLES.index(m["role"]) if m["role"] in ROLES else 0)
-                    ev2=st.number_input("Velocity",1.0,60.0,float(m["velocity_avg"]),step=0.5)
-                    sv3,rm3=st.columns(2)
-                    if sv3.form_submit_button("💾 Save",type="primary"):
-                        exe("UPDATE team_members SET name=%s,email=%s,role=%s,velocity_avg=%s WHERE id=%s",(en2,ee2.strip(),er2,ev2,int(m["id"]))); st.success("Saved!"); st.rerun()
-                    if rm3.form_submit_button("🗑️ Remove"):
-                        exe("UPDATE tasks SET assignee_id=NULL WHERE assignee_id=%s",(int(m["id"]),)); exe("DELETE FROM team_members WHERE id=%s",(int(m["id"]),)); st.success("Removed."); st.rerun()
+                if st.session_state.get("role") == "Manager":
+                    with st.form(f"em_{m['id']}"):
+                        en2=st.text_input("Name",value=m["name"])
+                        ee2=st.text_input("Email",value=m.get("email") or "")
+                        er2=st.selectbox("Role",ROLES,index=ROLES.index(m["role"]) if m["role"] in ROLES else 0)
+                        ev2=st.number_input("Velocity",1.0,60.0,float(m["velocity_avg"]),step=0.5)
+                        sv3,rm3=st.columns(2)
+                        if sv3.form_submit_button("💾 Save",type="primary"):
+                            exe("UPDATE team_members SET name=%s,email=%s,role=%s,velocity_avg=%s WHERE id=%s",(en2,ee2.strip(),er2,ev2,int(m["id"]))); st.success("Saved!"); st.rerun()
+                        if rm3.form_submit_button("🗑️ Remove"):
+                            exe("UPDATE tasks SET assignee_id=NULL WHERE assignee_id=%s",(int(m["id"]),)); exe("DELETE FROM team_members WHERE id=%s",(int(m["id"]),)); st.success("Removed."); st.rerun()
+                else:
+                    st.markdown(
+                        f"""
+                        <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px">
+                            <table style="width:100%;border-collapse:collapse;color:#c9d1d9;font-size:13px">
+                                <tr>
+                                    <td style="padding:4px 0;color:#8b949e">Email:</td>
+                                    <td style="padding:4px 0;font-weight:500">{m.get('email') or '—'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:4px 0;color:#8b949e">Role:</td>
+                                    <td style="padding:4px 0;font-weight:500">{m['role']}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:4px 0;color:#8b949e">Velocity:</td>
+                                    <td style="padding:4px 0;font-weight:500">{m['velocity_avg']} pt</td>
+                                </tr>
+                            </table>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
     st.markdown('</div>',unsafe_allow_html=True)
 
 
@@ -1703,10 +1774,10 @@ elif page == "Team":
 elif page == "AI Insights":
     st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
     st.markdown("### 🔮 AI Insights & Predictions")
-    st.caption("Auto-Blocker Detection · Time Predictor · Velocity Forecast · Risk Scoring")
+    st.caption("Auto-Blocker Detection · Risk Scoring · Recommendations")
 
     act=load_active(proj_id); team=load_team(proj_id)
-    tab1,tab2,tab3,tab4,tab5=st.tabs(["🤖 Auto Detection","⏱️ Time Predictor","📈 Velocity","🔍 Risk","💡 Recommendations"])
+    tab1,tab2,tab3=st.tabs(["🤖 Auto Detection","🔍 Risk","💡 Recommendations"])
 
     with tab1:
         st.subheader("🤖 Automatic Blocker & Delay Detection")
@@ -1763,78 +1834,6 @@ elif page == "AI Insights":
                     )
 
     with tab2:
-        st.subheader("⏱️ Task Completion Time Predictor")
-
-        # Train predictor on THIS project's data only
-        proj_predictor, hist_count = get_predictor_for_project(proj_id)
-
-        if proj_predictor.trained:
-            st.success(f"✅ Random Forest trained on **{hist_count} tasks** from this project  |  MAE: **{proj_predictor.mae}h**")
-            imps = proj_predictor.feature_importances()
-            if imps:
-                st.image(get_importance_chart(tuple(sorted(imps.items()))), use_container_width=True)
-        else:
-            st.markdown(f"""
-            <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;
-                 padding:28px;text-align:center;margin:12px 0">
-              <div style="font-size:36px;margin-bottom:10px">🤖</div>
-              <div style="color:#e6edf3;font-size:16px;font-weight:600;margin-bottom:6px">Not enough data yet</div>
-              <div style="color:#8b949e;font-size:13px;margin-bottom:16px">
-                The AI model needs at least <strong style="color:#58a6ff">5 completed tasks</strong> with
-                actual hours logged to train.<br>
-                This project currently has <strong style="color:#d29922">{hist_count} qualifying task(s)</strong>.
-              </div>
-              <div style="display:inline-flex;gap:8px;flex-wrap:wrap;justify-content:center">
-                <div style="background:#21262d;border-radius:6px;padding:8px 14px;font-size:12px;color:#8b949e">
-                  1️⃣ Create tasks in Backlog
-                </div>
-                <div style="background:#21262d;border-radius:6px;padding:8px 14px;font-size:12px;color:#8b949e">
-                  2️⃣ Log actual hours on completion
-                </div>
-                <div style="background:#21262d;border-radius:6px;padding:8px 14px;font-size:12px;color:#8b949e">
-                  3️⃣ Complete a sprint
-                </div>
-              </div>
-              <div style="color:#8b949e;font-size:11px;margin-top:12px">
-                Until then, predictions use a <span style="color:#fbbf24">rule-based heuristic</span> (estimate × priority factor)
-              </div>
-            </div>""", unsafe_allow_html=True)
-
-        st.divider()
-        st.markdown("**🔮 Predict a Task**")
-        opts3=member_opts(team)
-        with st.form("pf"):
-            pc1,pc2=st.columns(2)
-            p_sp=pc1.slider("Story Points",1,13,5)
-            p_eh=pc1.number_input("Your Estimated Hours",1.0,80.0,10.0)
-            p_pr=pc2.selectbox("Priority",["Low","Medium","High","Critical"],index=2)
-            p_mb=pc2.selectbox("Assignee",list(opts3.keys()),format_func=lambda x:opts3[x])
-            p_cp=pc2.slider("Sprint Planned Points",20,80,40)
-            if st.form_submit_button("🔮 Predict",type="primary"):
-                vel4=14.0
-                if p_mb and not team.empty:
-                    row4=team[team["id"]==p_mb]
-                    if not row4.empty: vel4=float(row4["velocity_avg"].values[0])
-                pred5=proj_predictor.predict(p_sp,p_eh,p_pr,vel4,p_cp)
-                diff5=pred5-p_eh
-                r1,r2,r3=st.columns(3)
-                r1.metric("AI Predicted",f"{pred5}h")
-                r2.metric("Your Estimate",f"{p_eh}h")
-                r3.metric("Variance",f"{diff5:+.1f}h",delta_color="inverse" if diff5>0 else "normal")
-                mode = "🧠 ML Model" if proj_predictor.trained else "📐 Heuristic"
-                st.info(f"Prediction mode: **{mode}**  ·  Risk: {'🔴 High' if diff5>p_eh*0.3 else '🟡 Medium' if diff5>0 else '🟢 Low'}")
-
-    with tab3:
-        st.subheader("📈 Velocity Forecast")
-        mets5=load_metrics(proj_id)
-        if mets5.empty: st.info("No completed sprints yet.")
-        else:
-            vl5=mets5["velocity"].tolist(); fc5=vel_fc.forecast(vl5)
-            v1,v2,v3=st.columns(3)
-            v1.metric("Forecast",f"{fc5['forecast']} pts"); v2.metric("Trend",fc5["trend"].capitalize()); v3.metric("Confidence",f"{fc5['confidence']*100:.0f}%")
-            st.image(get_velocity_chart(tuple(mets5["planned_points"].tolist()), tuple(vl5), tuple(mets5["sprint_name"].tolist()), fc5["forecast"]), use_container_width=True)
-
-    with tab4:
         st.subheader("🔍 Risk Analyzer")
         if not act: st.warning("No active sprint.")
         else:
@@ -1852,27 +1851,30 @@ elif page == "AI Insights":
                 rrows.append({"Task":t["title"],"Assignee":t.get("assignee_name","—"),"Priority":t["priority"],"Status":t["status"],"Risk":tr7["level"].upper(),"Score":tr7["score"],"Reason":tr7["reasons"][0] if tr7["reasons"] else "—"})
             if rrows: st.dataframe(pd.DataFrame(rrows).sort_values("Score",ascending=False),use_container_width=True,hide_index=True)
 
-    with tab5:
+    with tab3:
         st.subheader("💡 Recommendations")
         if not act: st.info("No active sprint.")
         else:
             tdf7=load_tasks(sprint_id=act["id"]); tasks7=tdf7.to_dict("records")
-            # ADD THIS BELOW EXISTING CODE
             rb_insights = generate_insights(tasks7)
             rb_blockers, rb_warnings = detect_blockers(tasks7)
-            st.markdown("**Rule-Based Insights**")
-            for msg in rb_insights:
-                st.markdown(f'<div class="rc rc-info">💡 {msg}</div>', unsafe_allow_html=True)
+            if rb_insights:
+                st.markdown("**Rule-Based Insights**")
+                for msg in rb_insights[:2]:
+                    st.markdown(f'<div class="rc rc-info">💡 {msg}</div>', unsafe_allow_html=True)
             if rb_warnings:
                 st.markdown("**Blocker Detection Warnings**")
-                for warn in rb_warnings:
+                for warn in rb_warnings[:2]:
                     st.markdown(f'<div class="rc rc-warn">⚠️ {warn}</div>', unsafe_allow_html=True)
 
             mets6=load_metrics(proj_id); vl6=mets6["velocity"].tolist() if not mets6.empty else [30,35,38,40]
-            sr7=risk_det.assess_sprint_risk(act,tasks7); vfc7=vel_fc.forecast(vl6)
+            sr7=risk_det.assess_sprint_risk(act,tasks7)
+            # Use a lightweight np.mean heuristic instead of calling expensive ML forecasting
+            vfc7 = {"forecast": int(np.mean(vl6)) if vl6 else 30, "trend": "stable", "confidence": 0.8}
             recs7=rec_eng.generate(sr7,tasks7,vfc7,team.to_dict("records"))
             rc_map2={"warning":"rc-warn","caution":"rc-caut","action":"rc-act","info":"rc-info","success":"rc-ok"}
-            for r in recs7:
+            st.markdown("**🔔 Recommendations**")
+            for r in recs7[:2]:
                 st.markdown(f'<div class="rc {rc_map2.get(r["type"],"rc-info")}"><strong style="color:#e6edf3">{r["icon"]} {r["title"]}</strong><br><span style="color:#8b949e">{r["body"]}</span></div>',unsafe_allow_html=True)
     st.markdown('</div>',unsafe_allow_html=True)
 
@@ -1886,6 +1888,29 @@ elif page == "Reports":
     if sdf7.empty: st.info("No sprints yet."); st.markdown('</div>',unsafe_allow_html=True); st.stop()
 
     sel7=st.selectbox("Select Sprint",sdf7["name"].tolist())
+
+    if "reports_state" not in st.session_state:
+        st.session_state.reports_state = {"sprint_name": None, "generated": False}
+
+    if sel7 != st.session_state.reports_state["sprint_name"]:
+        st.session_state.reports_state = {"sprint_name": sel7, "generated": False}
+
+    if not st.session_state.reports_state["generated"]:
+        st.markdown(f"""
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:32px;text-align:center;margin-bottom:16px">
+          <div style="font-size:40px;margin-bottom:12px">📄</div>
+          <div style="color:#e6edf3;font-size:16px;font-weight:600;margin-bottom:6px">Sprint Performance Report</div>
+          <div style="color:#8b949e;font-size:13px;margin-bottom:20px">
+            Generate a detailed performance report for <strong>{sel7}</strong>. This compiles sprint metrics, health breakdown, AI risk scores, team workloads, and exportable logs.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("📄 View Sprint Report", type="primary", use_container_width=True):
+            st.session_state.reports_state["generated"] = True
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.stop()
+
     srow7=sdf7[sdf7["name"]==sel7].iloc[0]; sid7=int(srow7["id"])
     tdf7=load_tasks(sprint_id=sid7); tasks7=tdf7.to_dict("records")
     hlth7=compute_sprint_health(tasks7,srow7.to_dict()); sr7b=risk_det.assess_sprint_risk(srow7.to_dict(),tasks7)
@@ -2118,6 +2143,13 @@ elif page == "Reports":
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "Daily Progress":
     st.markdown('<div class="page-wrap">', unsafe_allow_html=True)
+
+    # Reset pagination limits on project switch
+    if "last_project_id" not in st.session_state or st.session_state.last_project_id != proj_id:
+        st.session_state.last_project_id = proj_id
+        st.session_state.my_logs_limit = 20
+        st.session_state.team_logs_limit = 20
+
     st.markdown("### 📝 Daily Progress Logs")
     st.caption("Log daily progress, update hours, and track team status updates.")
     
@@ -2235,6 +2267,15 @@ elif page == "Daily Progress":
         with rcol:
             st.markdown("#### 🕒 My Recent Logs")
             
+            if "my_logs_limit" not in st.session_state:
+                st.session_state.my_logs_limit = 20
+
+            count_df = qry("""
+                SELECT COUNT(*) as cnt FROM member_comments 
+                WHERE member_id = %s AND project_id = %s
+            """, [member_id, proj_id])
+            total_my_logs = int(count_df.iloc[0]["cnt"]) if not count_df.empty else 0
+
             my_logs = qry("""
                 SELECT mc.*, s.name as sprint_name, t.title as task_title, t.id as t_id
                 FROM member_comments mc
@@ -2242,7 +2283,8 @@ elif page == "Daily Progress":
                 LEFT JOIN tasks t ON mc.task_id = t.id
                 WHERE mc.member_id = %s AND mc.project_id = %s
                 ORDER BY mc.id DESC
-            """, [member_id, proj_id])
+                LIMIT %s
+            """, [member_id, proj_id, st.session_state.my_logs_limit])
             
             if my_logs.empty:
                 st.caption("You haven't logged any progress comments in this project yet.")
@@ -2312,6 +2354,11 @@ elif page == "Daily Progress":
                                     st.success("Log entry deleted.")
                                     st.rerun()
 
+            if total_my_logs > len(my_logs):
+                if st.button("Load More Logs", key="load_more_my_logs", use_container_width=True):
+                    st.session_state.my_logs_limit += 20
+                    st.rerun()
+
     # ── MANAGER VIEW ──
     elif role == "Manager":
         st.markdown("#### 👥 Team Work Progress Logs")
@@ -2338,6 +2385,18 @@ elif page == "Daily Progress":
             
         search_query = st.text_input("🔍 Search comments", "")
         
+        if "team_logs_limit" not in st.session_state:
+            st.session_state.team_logs_limit = 20
+
+        count_query = """
+            SELECT COUNT(*) as cnt
+            FROM member_comments mc
+            JOIN team_members tm ON mc.member_id = tm.id
+            LEFT JOIN sprints s ON mc.sprint_id = s.id
+            LEFT JOIN tasks t ON mc.task_id = t.id
+            WHERE mc.project_id = %s
+        """
+
         query_str = """
             SELECT mc.*, tm.name as member_name, tm.avatar_color, tm.email as member_email,
                    s.name as sprint_name, t.title as task_title
@@ -2348,24 +2407,32 @@ elif page == "Daily Progress":
             WHERE mc.project_id = %s
         """
         params = [proj_id]
-        
+
         if sel_member_id:
+            count_query += " AND mc.member_id = %s"
             query_str += " AND mc.member_id = %s"
             params.append(sel_member_id)
         if sel_sprint_id:
+            count_query += " AND mc.sprint_id = %s"
             query_str += " AND mc.sprint_id = %s"
             params.append(sel_sprint_id)
         if isinstance(date_sel, (list, tuple)) and len(date_sel) == 2:
+            count_query += " AND mc.created_at >= %s AND mc.created_at <= %s"
             query_str += " AND mc.created_at >= %s AND mc.created_at <= %s"
             params.append(str(date_sel[0]) + " 00:00:00")
             params.append(str(date_sel[1]) + " 23:59:59")
         if search_query.strip():
+            count_query += " AND mc.comment_text ILIKE %s"
             query_str += " AND mc.comment_text ILIKE %s"
             params.append(f"%{search_query.strip()}%")
-            
+
         query_str += " ORDER BY mc.id DESC"
-        
-        comments_df = qry(query_str, params)
+
+        count_df = qry(count_query, params)
+        total_team_logs = int(count_df.iloc[0]["cnt"]) if not count_df.empty else 0
+
+        query_str += " LIMIT %s"
+        comments_df = qry(query_str, params + [st.session_state.team_logs_limit])
         
         if comments_df.empty:
             st.info("No matching daily progress logs found.")
@@ -2398,5 +2465,10 @@ elif page == "Daily Progress":
                     <p style="color:#e6edf3; font-size:13px; margin:0; padding-left:34px;">{log['comment_text']}</p>
                 </div>
                 """, unsafe_allow_html=True)
-                            
+
+            if total_team_logs > len(comments_df):
+                if st.button("Load More Logs", key="load_more_team_logs", use_container_width=True):
+                    st.session_state.team_logs_limit += 20
+                    st.rerun()
+
     st.markdown('</div>', unsafe_allow_html=True)
