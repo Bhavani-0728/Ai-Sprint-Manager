@@ -139,35 +139,56 @@ if not st.session_state["user"] and not st.session_state.get("logout_triggered")
             st.rerun()
 
 def render_landing_page():
+    qp = st.query_params
+    if "go" in qp:
+        dest = qp["go"]
+        st.query_params.clear()
+        st.session_state["auth_page"] = dest
+        st.rerun()
+
     st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    html {
-        scroll-behavior: smooth !important;
+
+    :root { color-scheme: dark !important; }
+    html { scroll-behavior: smooth !important; color-scheme: dark !important; }
+
+    @media (prefers-color-scheme: light) {
+        :root, html, body, .main, [data-testid="stApp"], [data-testid="stAppViewContainer"] {
+            color-scheme: dark !important;
+            background-color: #0d1117 !important;
+            color: #e6edf3 !important;
+        }
+        section.main, [data-testid="stAppViewContainer"] {
+            background-color: #0d1117 !important;
+        }
     }
-    
-    /* Landing page background & overrides */
+
     section.main {
-        background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.15), transparent 40%),
-                    radial-gradient(circle at bottom left, rgba(168, 85, 247, 0.1), transparent 40%),
+        background: radial-gradient(circle at top right, rgba(99,102,241,0.15), transparent 40%),
+                    radial-gradient(circle at bottom left, rgba(168,85,247,0.1), transparent 40%),
                     #0D1117 !important;
         font-family: 'Inter', sans-serif !important;
     }
-    
-    /* Custom container padding */
-    section.main > div.block-container {
-        padding: 40px 5% !important;
-        max-width: 1200px !important;
-        margin: 0 auto !important;
+
+    /* Hide default Streamlit top padding */
+    .block-container { padding-top: 2rem !important; }
+
+    /* ── NAVBAR ── */
+    .nav-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        margin-bottom: 0;
     }
-    
-    .logo-container {
+    .nav-left {
         display: flex;
         align-items: center;
         gap: 10px;
         font-family: 'Outfit', sans-serif;
-        font-size: 26px;
+        font-size: 22px;
         font-weight: 800;
         color: #ffffff;
         letter-spacing: -0.5px;
@@ -176,13 +197,148 @@ def render_landing_page():
         background: linear-gradient(135deg, #58a6ff, #a855f7);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        filter: drop-shadow(0 0 10px rgba(88, 166, 255, 0.4));
+        filter: drop-shadow(0 0 10px rgba(88,166,255,0.4));
     }
-    
-    /* Hero section */
+    .nav-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .nav-link {
+        display: inline-block;
+        padding: 7px 16px;
+        text-decoration: none;
+        color: #94A3B8;          /* muted, not bright */
+        font-weight: 500;
+        font-size: 13.5px;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+        border: none;            /* ← remove the box */
+        background: transparent;
+    }
+    .nav-link.active {
+        color: #58a6ff;              /* blue tint to show it's clickable */
+        background: transparent;
+        border: none;
+    }
+    .nav-link:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.08);  /* subtle highlight on hover */
+        border-radius: 6px;
+    }
+    .nav-btn {
+        display: inline-block;
+        padding: 7px 18px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 13px;
+        border-radius: 7px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    .nav-btn-ghost {
+        color: #94A3B8;
+        background: transparent;
+        border: none;            /* ← no border on Login */
+        font-weight: 500;
+    }
+    .nav-btn-ghost:hover {
+        color: #ffffff;
+        background: rgba(255,255,255,0.06);
+        border: none;
+    }
+    .nav-btn-primary {
+        color: #ffffff;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        box-shadow: 0 2px 10px rgba(124, 58, 237, 0.35);
+        border: none;
+        border-radius: 7px;
+        padding: 7px 18px;
+        text-decoration: none;
+    }
+    .nav-btn-primary:hover {
+        background: linear-gradient(135deg, #6366f1, #a855f7);
+        box-shadow: 0 4px 14px rgba(168, 85, 247, 0.45);
+        color: #ffffff;
+        text-decoration: none;
+    }
+    /* Pull buttons up into navbar */
+    /* Align Features link vertically in column */
+    [data-testid="stMarkdownContainer"] a.nav-link {
+        display: flex !important;
+        align-items: center !important;
+        height: 38px !important;
+        margin-top: 4px !important;
+    }
+    [data-testid="stHorizontalBlock"] {
+        margin-top: -58px !important;
+        margin-bottom: 0 !important;
+    }
+    /* All nav buttons ghost by default */
+    [data-testid="stButton"] button {
+        background: transparent !important;
+        border: none !important;
+        color: #94A3B8 !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+    }
+    [data-testid="stButton"] button:hover {
+        color: #ffffff !important;
+        background: rgba(255,255,255,0.06) !important;
+    }
+
+    /* Sign Up only gets purple */
+    [data-testid="stButton"] button[kind="primary"] {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+        border: none !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stButton"] button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #6366f1, #a855f7) !important;
+    }
+    /* Remove Streamlit default anchor styling */
+    [data-testid="stMarkdownContainer"] a {
+        color: #94A3B8 !important;
+        background: transparent !important;
+        text-decoration: none !important;
+        border: none !important;
+        outline: none !important;
+    }
+    [data-testid="stMarkdownContainer"] a:hover {
+        color: #ffffff !important;
+        background: rgba(255,255,255,0.06) !important;
+        border-radius: 6px !important;
+    }
+    a.nav-features-link,
+    a.nav-features-link:link,
+    a.nav-features-link:visited,
+    a.nav-features-link:active {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        height: 38px !important;
+        margin-top: 5px !important;
+        color: #94A3B8 !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        text-decoration: none !important;
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        border-radius: 6px !important;
+        -webkit-text-fill-color: #94A3B8 !important;
+    }
+    a.nav-features-link:hover {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        background: rgba(255,255,255,0.06) !important;
+    }
+    /* ── HERO ── */
     .hero-sec {
         text-align: center;
-        padding: 40px 0 60px 0;
+        padding: 60px 0 60px 0;
         max-width: 850px;
         margin: 0 auto;
     }
@@ -204,8 +360,8 @@ def render_landing_page():
         margin-bottom: 36px;
         font-weight: 400;
     }
-    
-    /* Feature Grid */
+
+    /* ── FEATURES ── */
     .section-title {
         text-align: center;
         font-family: 'Outfit', sans-serif;
@@ -228,45 +384,20 @@ def render_landing_page():
         gap: 20px;
         margin-bottom: 60px;
     }
-    @media (max-width: 1024px) {
-        .feat-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-    @media (max-width: 600px) {
-        .feat-grid {
-            grid-template-columns: 1fr;
-        }
-    }
+    @media (max-width: 1024px) { .feat-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px)  { .feat-grid { grid-template-columns: 1fr; } }
     .feat-card {
-        background: rgba(22, 27, 34, 0.45);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(22,27,34,0.45);
+        border: 1px solid rgba(255,255,255,0.05);
         border-radius: 12px;
         padding: 24px;
         transition: all 0.3s ease;
     }
     .feat-card:hover {
         transform: translateY(-4px);
-        background: rgba(22, 27, 34, 0.7);
+        background: rgba(22,27,34,0.7);
         border-color: #58a6ff !important;
-        box-shadow: 0 0 15px rgba(88, 166, 255, 0.25);
-    }
-    .feat-icon {
-        font-size: 26px;
-        margin-bottom: 14px;
-        display: inline-block;
-    }
-    .feat-title {
-        font-family: 'Outfit', sans-serif;
-        font-size: 17px;
-        font-weight: 600;
-        color: #ffffff;
-        margin-bottom: 8px;
-    }
-    .feat-desc {
-        font-size: 13px;
-        color: #94A3B8;
-        line-height: 1.5;
+        box-shadow: 0 0 15px rgba(88,166,255,0.25);
     }
     
     /* Bright, premium button styles for landing page only */
@@ -316,39 +447,19 @@ def render_landing_page():
     }
     </style>
     """, unsafe_allow_html=True)
-    
-    # 1. Navbar
-    nc1, nc2, nc3, nc4, nc5 = st.columns([2.5, 3.7, 1.2, 1.2, 1.2])
-    with nc1:
+
+    # ── NAVBAR — 100% HTML, no Streamlit columns ──
+    st.markdown("""
+    <div class="nav-wrapper">
+    <div class="nav-left">
+        <span>⚡</span><span class="logo-glow">SprintAI</span>
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+    nc1, nc2, nc3, nc4, nc5 = st.columns([5.5, 0.6, 0.7, 0.6, 0.8])
+    with nc2:
         st.markdown("""
-        <div class="logo-container" style="margin-top: 6px;">
-            <span>⚡</span><span class="logo-glow">SprintAI</span>
-        </div>
-        """, unsafe_allow_html=True)
-    with nc3:
-        st.markdown("""
-        <a href="#features" style="
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-            background: linear-gradient(135deg, #7c3aed, #a855f7);
-            border: none;
-            color: #ffffff;
-            font-weight: 700;
-            font-size: 14px;
-            padding: 8px 16px;
-            border-radius: 8px;
-            width: 100%;
-            box-sizing: border-box;
-            text-align: center;
-            transition: all 0.3s ease;
-            height: 38px;
-            margin-top: 4px;
-            box-shadow: 0 0 10px rgba(124, 58, 237, 0.4);
-        " onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 0 15px rgba(124, 58, 237, 0.6)';" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 0 10px rgba(124, 58, 237, 0.4)';">
-            Features
-        </a>
+            <a href="#features" class="nav-features-link">Features</a>
         """, unsafe_allow_html=True)
     with nc4:
         if st.button("Login", key="nav_login", use_container_width=True):
@@ -358,71 +469,47 @@ def render_landing_page():
         if st.button("Sign Up", key="nav_signup", use_container_width=True, type="primary"):
             st.session_state["auth_page"] = "signup"
             st.rerun()
-            
-    # 2. Hero Section
+    # ── HERO ──
     st.markdown("""
-    <div class="hero-sec" style="padding: 80px 0 100px 0; text-align: center; max-width: 850px; margin: 0 auto;">
-        <div class="hero-tagline" style="
-            background: linear-gradient(135deg, #58a6ff 0%, #7c3aed 50%, #a855f7 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-family: 'Outfit', sans-serif;
-            font-size: 58px;
-            font-weight: 800;
-            line-height: 1.15;
-            letter-spacing: -1.5px;
-            margin-bottom: 28px;
-            text-align: center;
-        ">
-            Transform Your Sprints<br>With AI-Powered Intelligence
-        </div>
-        <div class="hero-subtext" style="
-            color: #CBD5E1;
-            font-size: 19px;
-            max-width: 800px;
-            margin: 0 auto;
-            line-height: 1.6;
-            text-align: center;
-            font-weight: 400;
-        ">
-            Plan smarter, predict risks, track team performance,<br>
-            identify blockers, and deliver successful sprints with AI assistance.
-        </div>
+    <div class="hero-sec">
+      <div class="hero-tagline">Transform Your Sprints With AI-Powered Intelligence</div>
+      <div class="hero-subtext">Plan smarter, predict risks, track team performance, identify blockers,
+        and deliver successful sprints with AI assistance.</div>
     </div>
     """, unsafe_allow_html=True)
-    
-    # 3. Features Section
+
+    # ── FEATURES ──
     st.markdown('<div id="features" class="section-title">SprintAI Platform Features</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-subtitle">A comprehensive suite of tools built specifically for agile development team collaboration.</div>', unsafe_allow_html=True)
-    
+
     features = [
-        ("🤖", "AI Sprint Planning", "Automatically analyze sprint workload and planning."),
-        ("📋", "Task Management", "Create, assign and track tasks efficiently."),
-        ("⚠️", "Risk Prediction", "Identify blockers and sprint risks early."),
-        ("📝", "Daily Updates", "Members submit daily work logs and blockers."),
-        ("👥", "Team Management", "Manage team members and assignments."),
-        ("📊", "Sprint Analytics", "Track velocity, completion rates and progress."),
-        ("🧠", "AI Insights", "Receive intelligent recommendations and health analysis."),
-        ("📄", "PDF Reports", "Generate detailed member, sprint and team reports."),
-        ("🚫", "Auto Blocker Detection", "Automatically identify stalled tasks."),
-        ("📈", "Velocity Tracking", "Monitor planned vs actual sprint performance."),
-        ("🎯", "Sprint Health Grading", "AI-generated sprint health scores and grades."),
-        ("📦", "Kanban Board", "Visual task management across sprint stages.")
+        ("🤖", "AI Sprint Planning",      "Automatically analyze sprint workload and planning."),
+        ("📋", "Task Management",         "Create, assign and track tasks efficiently."),
+        ("⚠️", "Risk Prediction",          "Identify blockers and sprint risks early."),
+        ("📝", "Daily Updates",           "Members submit daily work logs and blockers."),
+        ("👥", "Team Management",         "Manage team members and assignments."),
+        ("📊", "Sprint Analytics",        "Track velocity, completion rates and progress."),
+        ("🧠", "AI Insights",             "Receive intelligent recommendations and health analysis."),
+        ("📄", "PDF Reports",             "Generate detailed member, sprint and team reports."),
+        ("🚫", "Auto Blocker Detection",  "Automatically identify stalled tasks."),
+        ("📈", "Velocity Tracking",       "Monitor planned vs actual sprint performance."),
+        ("🎯", "Sprint Health Grading",   "AI-generated sprint health scores and grades."),
+        ("📦", "Kanban Board",            "Visual task management across sprint stages."),
     ]
-    
+
     cards_html = '<div class="feat-grid">'
     for icon, title, desc in features:
         cards_html += f'<div class="feat-card"><div class="feat-icon">{icon}</div><div class="feat-title">{title}</div><div class="feat-desc">{desc}</div></div>'
     cards_html += '</div>'
     st.markdown(cards_html, unsafe_allow_html=True)
-    
+
     st.markdown("""
-    <div style="padding: 40px 0; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 80px; color: #8b949e; font-size: 12px;">
-        <div>⚡ SprintAI Agile Manager & Analytics Suite · CVR College of Engineering</div>
-        <div style="margin-top: 8px; font-size: 11px; color: #58a6ff;">Built for Agile Teams with Love.</div>
+    <div style="padding:40px 0;text-align:center;border-top:1px solid rgba(255,255,255,0.05);
+                margin-top:80px;color:#8b949e;font-size:12px;">
+        <div>⚡ SprintAI Agile Manager &amp; Analytics Suite · CVR College of Engineering</div>
+        <div style="margin-top:8px;font-size:11px;color:#58a6ff;">Built for Agile Teams with Love.</div>
     </div>
     """, unsafe_allow_html=True)
-
 
 def render_login_page():
     st.markdown("""
@@ -621,12 +708,88 @@ def render_auth_gate():
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+/* ── Force dark mode regardless of OS/browser light-theme preference ── */
+:root {
+    color-scheme: dark !important;
+}
+
+/* Re-apply ALL dark-theme values when the OS is set to light mode */
+@media (prefers-color-scheme: light) {
+    :root, html, body {
+        color-scheme: dark !important;
+        --background-color: #0d1117 !important;
+        --secondary-background-color: #161b22 !important;
+        --text-color: #e6edf3 !important;
+        --primary-color: #ef4444 !important;
+    }
+    /* Streamlit app containers */
+    [data-testid="stApp"],
+    [data-testid="stAppViewContainer"],
+    [data-testid="stHeader"],
+    section.main,
+    .main {
+        background-color: #0d1117 !important;
+        color: #e6edf3 !important;
+    }
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: #161b22 !important;
+        border-right: 1px solid #30363d !important;
+    }
+    /* Inputs */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stNumberInput input,
+    .stSelectbox > div > div,
+    .stDateInput input,
+    .stMultiSelect > div {
+        background-color: #21262d !important;
+        border-color: #30363d !important;
+        color: #e6edf3 !important;
+    }
+    /* Buttons */
+    .stButton > button {
+        background-color: #21262d !important;
+        color: #c9d1d9 !important;
+        border-color: #30363d !important;
+    }
+    .stButton > button[kind="primary"] {
+        background-color: #238636 !important;
+        color: #ffffff !important;
+    }
+    /* Forms */
+    .stForm {
+        background-color: #161b22 !important;
+        border-color: #30363d !important;
+    }
+    /* Expanders */
+    .streamlit-expanderHeader {
+        background-color: #161b22 !important;
+        border-color: #30363d !important;
+    }
+    .streamlit-expanderContent {
+        background-color: #0d1117 !important;
+        border-color: #30363d !important;
+    }
+    /* Text & headings */
+    h1, h2, h3 { color: #e6edf3 !important; }
+    p, li, .stMarkdown { color: #8b949e !important; }
+    label { color: #8b949e !important; }
+    /* Metrics */
+    [data-testid="stMetricValue"] { color: #e6edf3 !important; }
+    [data-testid="stMetricLabel"] { color: #8b949e !important; }
+    /* DataFrames */
+    .stDataFrame { border-color: #30363d !important; }
+}
+
 html,body,[class*="css"]  { font-family:'Inter',sans-serif; }
 code,.stCode              { font-family:'DM Mono',monospace !important; }
 .main                     { background:#0d1117; }
 .block-container          { padding:68px 0 32px 0 !important; max-width:100% !important; }
 section[data-testid="stSidebar"] { background:#161b22; border-right:1px solid #30363d; }
-section[data-testid="stSidebar"] .block-container { padding:16px !important; }
+section[data-testid="stSide
+bar"] .block-container { padding:16px !important; }
 
 /* hide only deploy button, keep sidebar toggle visible */
 #MainMenu { visibility:hidden; }
@@ -697,7 +860,7 @@ div[data-testid="column"] .stButton>button.tab-btn {
 
 /* cards */
 .card                 { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px 18px; margin-bottom:12px; }
-.kpi-card             { background:rgba(22, 27, 34, 0.5); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:20px; position:relative; overflow:hidden; min-height:105px; box-shadow:0 4px 20px rgba(0,0,0,0.15); transition:all 0.3s ease; }
+.kpi-card             { background:rgba(22, 27, 34, 0.5); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:20px; position:relative; overflow:hidden; height:110px; box-shadow:0 4px 20px rgba(0,0,0,0.15); transition:all 0.3s ease; }
 .kpi-card:hover       { transform:translateY(-2px); border-color:rgba(88,166,255,0.25); }
 .sum-num              { font-size:28px; font-weight:700; }
 .sum-lbl              { font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
@@ -1321,7 +1484,7 @@ if page == "Dashboard":
     k2.markdown(f"""
     <div class="kpi-card">
         <div style="font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Active Sprint</div>
-        <div style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 700; color: #3fb950; margin-top: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{active_sprint_name}</div>
+        <div style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 700; color: #3fb950; margin-top: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{active_sprint_name}</div>
         <div style="position: absolute; right: 15px; bottom: 15px; font-size: 26px; opacity: 0.25;">🏃</div>
     </div>
     """, unsafe_allow_html=True)
