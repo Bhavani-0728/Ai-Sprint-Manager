@@ -457,9 +457,39 @@ def render_landing_page():
     </div>
     """, unsafe_allow_html=True)
     nc1, nc2, nc3, nc4, nc5 = st.columns([5.5, 0.6, 0.7, 0.6, 0.8])
-    with nc2:
+    # with nc2:
+    #     st.markdown("""
+    #         <a href="#features" class="nav-features-link">Features</a>
+    #     """, unsafe_allow_html=True)
+    with nc3:
+        
         st.markdown("""
-            <a href="#features" class="nav-features-link">Features</a>
+        <a href="#features" style="
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            background: linear-gradient(135deg, #7c3aed, #a855f7);
+            border: none;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            transition: all 0.3s ease;
+            height: 38px;
+            margin-top: 4px;
+            box-shadow: 0 0 10px rgba(124,58,237,.4);
+        "
+        onmouseover="this.style.transform='scale(1.05)';
+                    this.style.boxShadow='0 0 15px rgba(124,58,237,.6)'"
+        onmouseout="this.style.transform='scale(1)';
+                    this.style.boxShadow='0 0 10px rgba(124,58,237,.4)'">
+            Features
+        </a>
         """, unsafe_allow_html=True)
     with nc4:
         if st.button("Login", key="nav_login", use_container_width=True):
