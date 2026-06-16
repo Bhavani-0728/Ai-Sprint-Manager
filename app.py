@@ -18,6 +18,9 @@ from data.db_setup import create_tables, seed_data, get_conn, log_activity
 from auth import signup_user, login_user, logout_user
 from ai_module import generate_insights
 from blocker_detection import detect_blockers
+from email_helper import (notify_manager, notify_member, build_progress_log_email,
+                          build_task_assignment_email, build_task_reassignment_email,
+                          build_task_status_email, build_team_welcome_email)
 from models.ml_engine import (
     CompletionTimePredictor, RiskDetector, AutoBlockerDetector,
     VelocityForecaster, RecommendationEngine, compute_sprint_health
@@ -1344,9 +1347,9 @@ with st.sidebar:
     if not projects.empty:
         sel_p    = st.selectbox("📁 Project", projects["name"].tolist(), label_visibility="visible")
         prow     = projects[projects["name"]==sel_p].iloc[0]
-        proj_id  = int(prow["id"]); proj_name = prow["name"]
+        proj_id  = int(prow["id"]); proj_name = prow["name"]; manager_email = prow.get("created_by", "") or ""
     else:
-        proj_id = None; proj_name = "—"
+        proj_id = None; proj_name = "—"; manager_email = ""
 
     # ADD THIS BELOW EXISTING CODE
     if st.session_state.get("role") == "Manager":
@@ -1837,6 +1840,17 @@ elif page == "Board":
                         if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(int(cur["story_points"]),sid))
                         elif cur["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(cur["story_points"]),sid))
                     log_activity(proj_id,"User","updated",sel_t,"status",cur["status"],int(cur["id"]),sid,sel_t)
+                    # ── Email: notify manager of task status change ──
+                    if ns != cur["status"]:
+                        print(f"[SprintAI] Status changed {cur['status']} → {ns}, manager_email={manager_email!r}")
+                        if manager_email:
+                            _user_email = (st.session_state.get("user") or "").lower()
+                            _updater_row = team[team["email"].fillna("").str.lower() == _user_email] if not team.empty else pd.DataFrame()
+                            _updater_name = _updater_row.iloc[0]["name"] if not _updater_row.empty else _user_email or "A member"
+                            print(f"[SprintAI] Sending status email to manager: {manager_email}, from: {_updater_name}")
+                            notify_manager(manager_email,
+                                           f"[SprintAI] {_updater_name} updated task status — {proj_name}",
+                                           build_task_status_email(_updater_name, sel_t, cur["status"], ns, srow["name"], proj_name, nb.strip()))
                     st.success("Updated!"); st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -2073,10 +2087,7 @@ elif page == "Task Creation":
                 if st.form_submit_button("➕ Create Task",type="primary"):
                     if not t_tit.strip(): st.error("Title required.")
                     else:
-                        vel3=14.0
-                        if t_as:
-                            row3=team[team["id"]==t_as]
-                            if not row3.empty: vel3=float(row3["velocity_avg"].values[0])
+                        vel3=12.0
                         cap=40
                         if t_spr and not sdf.empty:
                             sr3=sdf[sdf["id"]==t_spr]
@@ -2093,6 +2104,15 @@ elif page == "Task Creation":
                         risk4=risk_det.assess_task_risk({"priority":t_pr,"status":init,"story_points":t_sp,"estimated_hours":t_eh,"assignee_id":t_as},vel3,7)
                         ri4={"low":"🟢","medium":"🟡","high":"🔴"}[risk4["level"]]
                         st.info(f"AI Risk: {ri4} **{risk4['level'].upper()}**" + (f"  — {risk4['reasons'][0]}" if risk4["reasons"] else ""))
+                        # ── Email: notify assigned member ──
+                        if t_as:
+                            _arow = team[team["id"] == t_as]
+                            if not _arow.empty:
+                                _aemail = _arow.iloc[0].get("email", "")
+                                if _aemail:
+                                    _spr_nm = sdf[sdf["id"]==t_spr]["name"].values[0] if (t_spr is not None and not sdf.empty) else None
+                                    notify_member(_aemail, f"[SprintAI] New task assigned: '{t_tit}' — {proj_name}",
+                                                  build_task_assignment_email(t_tit, t_des, t_pr, t_sp, t_eh, _spr_nm, proj_name))
                         st.success(f"Task '{t_tit}' created (ID {nid})"); st.rerun()
     else:
         st.caption("Member access: task creation is restricted.")
@@ -2153,6 +2173,15 @@ elif page == "Task Creation":
                                 if e_s=="Done" and t["status"]!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(e_sp2,e_spr2))
                                 elif t["status"]=="Done" and e_s!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(e_sp2,e_spr2))
                                 log_activity(proj_id,opts2.get(e_a,"User").split(" (")[0],"updated",e_t,"status",t["status"],int(t["id"]),e_spr2,e_t)
+                                # ── Email: notify new assignee if reassigned ──
+                                if e_a and e_a != t.get("assignee_id"):
+                                    _nr = team[team["id"] == e_a]
+                                    if not _nr.empty:
+                                        _ne = _nr.iloc[0].get("email", "")
+                                        if _ne:
+                                            _sl = sdf[sdf["id"]==e_spr2]["name"].values[0] if (e_spr2 is not None and not sdf.empty) else None
+                                            notify_member(_ne, f"[SprintAI] Task assigned to you: '{e_t}' — {proj_name}",
+                                                          build_task_reassignment_email(e_t, e_p, e_s, _sl, e_eh, proj_name))
                                 st.success("Saved!"); st.rerun()
                             if dl.form_submit_button("🗑️"):
                                 if t.get("sprint_id"):
@@ -2210,8 +2239,8 @@ elif page == "Team":
     if st.session_state.get("role") == "Manager":
         with st.expander("➕ Add Team Member",expanded=team_df.empty):
             with st.form("am", clear_on_submit=True):
-                mc1,mc2,mc3,mc4=st.columns(4)
-                mn=mc1.text_input("Full Name *"); me=mc2.text_input("Email *"); mr=mc3.selectbox("Role",ROLES); mv=mc4.number_input("Velocity",1.0,60.0,12.0,step=0.5)
+                mc1,mc2,mc3=st.columns(3)
+                mn=mc1.text_input("Full Name *"); me=mc2.text_input("Email *"); mr=mc3.selectbox("Role",ROLES)
                 if st.form_submit_button("➕ Add",type="primary"):
                     if not mn.strip(): st.error("Name required.")
                     elif not me.strip(): st.error("Email required.")
@@ -2219,8 +2248,16 @@ elif page == "Team":
                     elif not team_df.empty and me.strip() in team_df["email"].fillna("").tolist(): st.error("Email already exists.")
                     else:
                         col2=AVCOLS[len(team_df)%len(AVCOLS)]
-                        exe("INSERT INTO team_members(name,role,velocity_avg,project_id,avatar_color,email)VALUES(%s,%s,%s,%s,%s,%s)",(mn.strip(),mr,mv,proj_id,col2,me.strip()))
-                        log_activity(proj_id,mn.strip(),"joined team"); st.success(f"✅ {mn} added!"); st.rerun()
+                        exe("INSERT INTO team_members(name,role,velocity_avg,project_id,avatar_color,email)VALUES(%s,%s,%s,%s,%s,%s)",(mn.strip(),mr,12.0,proj_id,col2,me.strip()))
+                        log_activity(proj_id,mn.strip(),"joined team")
+                        # ── Email: welcome new member with project details ──
+                        if me.strip():
+                            _proj_row = qry("SELECT name, description FROM projects WHERE id = %s", [proj_id])
+                            _proj_desc = _proj_row.iloc[0].get("description", "") if not _proj_row.empty else ""
+                            notify_member(me.strip(),
+                                          f"[SprintAI] You've been added to '{proj_name}'",
+                                          build_team_welcome_email(mn.strip(), proj_name, _proj_desc, manager_email, mr))
+                        st.success(f"✅ {mn} added!"); st.rerun()
 
     st.divider()
     if team_df.empty: st.info("No team members yet."); st.markdown('</div>',unsafe_allow_html=True); st.stop()
@@ -2228,14 +2265,14 @@ elif page == "Team":
     rows=[]
     for _,m in team_df.iterrows():
         mt=tasks_df[tasks_df["assignee_id"]==m["id"]] if not tasks_df.empty else pd.DataFrame()
-        rows.append({"Name":m["name"],"Email":m.get("email") or "—","Role":m["role"],"Velocity":m["velocity_avg"],"Sprint Tasks":len(mt),
+        rows.append({"Name":m["name"],"Email":m.get("email") or "—","Role":m["role"],"Sprint Tasks":len(mt),
                      "Done":len(mt[mt["status"]=="Done"]) if not mt.empty else 0,"Blocked":len(mt[mt["status"]=="Blocked"]) if not mt.empty else 0})
     st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
     st.divider()
 
     for i,(_,m) in enumerate(team_df.iterrows()):
         avc=m.get("avatar_color","#3b82f6"); mt=tasks_df[tasks_df["assignee_id"]==m["id"]] if not tasks_df.empty else pd.DataFrame()
-        with st.expander(f"  **{m['name']}**  ·  {m['role']}  ·  ⚡ {m['velocity_avg']}pt",expanded=False):
+        with st.expander(f"  **{m['name']}**  ·  {m['role']}",expanded=False):
             ec1,ec2=st.columns([1.5,1])
             with ec1:
                 if not mt.empty:
@@ -2248,10 +2285,10 @@ elif page == "Team":
                         en2=st.text_input("Name",value=m["name"])
                         ee2=st.text_input("Email",value=m.get("email") or "")
                         er2=st.selectbox("Role",ROLES,index=ROLES.index(m["role"]) if m["role"] in ROLES else 0)
-                        ev2=st.number_input("Velocity",1.0,60.0,float(m["velocity_avg"]),step=0.5)
+
                         sv3,rm3=st.columns(2)
                         if sv3.form_submit_button("💾 Save",type="primary"):
-                            exe("UPDATE team_members SET name=%s,email=%s,role=%s,velocity_avg=%s WHERE id=%s",(en2,ee2.strip(),er2,ev2,int(m["id"]))); st.success("Saved!"); st.rerun()
+                            exe("UPDATE team_members SET name=%s,email=%s,role=%s WHERE id=%s",(en2,ee2.strip(),er2,int(m["id"]))); st.success("Saved!"); st.rerun()
                         if rm3.form_submit_button("🗑️ Remove"):
                             exe("UPDATE tasks SET assignee_id=NULL WHERE assignee_id=%s",(int(m["id"]),)); exe("DELETE FROM team_members WHERE id=%s",(int(m["id"]),)); st.success("Removed."); st.rerun()
                 else:
@@ -2267,10 +2304,7 @@ elif page == "Team":
                                     <td style="padding:4px 0;color:#8b949e">Role:</td>
                                     <td style="padding:4px 0;font-weight:500">{m['role']}</td>
                                 </tr>
-                                <tr>
-                                    <td style="padding:4px 0;color:#8b949e">Velocity:</td>
-                                    <td style="padding:4px 0;font-weight:500">{m['velocity_avg']} pt</td>
-                                </tr>
+
                             </table>
                         </div>
                         """,
@@ -2358,7 +2392,7 @@ elif page == "AI Insights":
                         f'</div>',unsafe_allow_html=True)
             rrows=[]
             for t in tasks6:
-                tr7=risk_det.assess_task_risk(t,t.get("velocity_avg",12),7)
+                tr7=risk_det.assess_task_risk(t,12,7)
                 rrows.append({"Task":t["title"],"Assignee":t.get("assignee_name","—"),"Priority":t["priority"],"Status":t["status"],"Risk":tr7["level"].upper(),"Score":tr7["score"],"Reason":tr7["reasons"][0] if tr7["reasons"] else "—"})
             if rrows: st.dataframe(pd.DataFrame(rrows).sort_values("Score",ascending=False),use_container_width=True,hide_index=True)
 
@@ -2876,6 +2910,13 @@ elif page == "Daily Updates":
                             task_title = task_title_row.iloc[0]["title"] if not task_title_row.empty else "Task"
                             log_activity(proj_id, member_name, f"logged {hours_logged}h", task_title, "actual_hours", "", f"+{hours_logged}h", sel_task_id, sel_sprint_id)
                             
+                        # ── Email: notify manager of progress log ──
+                        if manager_email:
+                            _spr_lbl = sprint_opts.get(sel_sprint_id, "— Backlog —").split(" (")[0] if sel_sprint_id else None
+                            _task_lbl = task_opts.get(sel_task_id, "").split("] ", 1)[-1].rsplit(" (", 1)[0] if sel_task_id else None
+                            notify_manager(manager_email,
+                                           f"[SprintAI] {member_name} logged progress — {proj_name}",
+                                           build_progress_log_email(member_name, _spr_lbl, _task_lbl, hours_logged, comment_val.strip(), datetime.now().strftime("%d %b %Y, %I:%M %p")))
                         st.success("Daily progress log successfully submitted!")
                         st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
