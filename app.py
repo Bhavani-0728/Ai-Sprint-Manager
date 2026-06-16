@@ -1858,11 +1858,18 @@ elif page == "Board":
                 cur=tdf[tdf["id"]==tid].iloc[0]
                 uc1,uc2,uc3=st.columns(3)
                 ns=uc1.selectbox("Status",["Todo","In Progress","Done","Blocked"],index=["Todo","In Progress","Done","Blocked"].index(cur["status"]))
-                na=uc2.number_input("Actual Hours",0.0,200.0,float(cur.get("actual_hours") or 0.0),step=0.5)
+                # Fix: pd.isna() correctly handles NaN (pandas NULL). Using `or 0.0`
+                # is wrong because float('nan') is truthy in Python, which meant
+                # NaN was passed to number_input instead of 0.0, causing Streamlit
+                # to fall back to stale session state (sometimes = estimated_hours).
+                _cur_ah = cur.get("actual_hours")
+                _ah_default = 0.0 if (_cur_ah is None or (isinstance(_cur_ah, float) and pd.isna(_cur_ah))) else float(_cur_ah)
+                na=uc2.number_input("Actual Hours",0.0,200.0,_ah_default,step=0.5,key=f"ah_{tid}")
                 nb=uc3.text_input("Blocker Note",value=cur.get("blocker_note") or "")
                 if st.form_submit_button("💾 Save",type="primary"):
                     exe("UPDATE tasks SET status=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-                        (ns,na or None,nb or None,tid))
+                        (ns,na if na > 0.0 else None,nb or None,tid))
+
                     if ns!=cur["status"]:
                         if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(int(cur["story_points"]),sid))
                         elif cur["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(cur["story_points"]),sid))
@@ -2184,8 +2191,12 @@ elif page == "Task Creation":
                             e_p=st.selectbox("Priority",["Low","Medium","High","Critical"],index=["Low","Medium","High","Critical"].index(t["priority"]),key=f"etp_{t['id']}")
                             e_a=st.selectbox("Assignee",list(opts2.keys()),format_func=lambda x:opts2[x],index=list(opts2.keys()).index(t["assignee_id"]) if t["assignee_id"] in list(opts2.keys()) else 0,key=f"eta_{t['id']}")
                             e_sp2=st.selectbox("Pts",[1,2,3,5,8,13],index=[1,2,3,5,8,13].index(int(t["story_points"])) if int(t["story_points"]) in [1,2,3,5,8,13] else 2,key=f"etsp_{t['id']}")
-                            e_eh=st.number_input("Est.h",0.5,200.0,float(t.get("estimated_hours") or 2.0),step=0.5,key=f"eteh_{t['id']}")
-                            e_ah=st.number_input("Act.h",0.0,200.0,float(t.get("actual_hours") or 0.0),step=0.5,key=f"etah_{t['id']}")
+                            _t_eh = t.get("estimated_hours")
+                            _eh_def = 2.0 if (_t_eh is None or (isinstance(_t_eh, float) and pd.isna(_t_eh))) else float(_t_eh)
+                            e_eh=st.number_input("Est.h",0.5,200.0,_eh_def,step=0.5,key=f"eteh_{t['id']}")
+                            _t_ah = t.get("actual_hours")
+                            _ah_def = 0.0 if (_t_ah is None or (isinstance(_t_ah, float) and pd.isna(_t_ah))) else float(_t_ah)
+                            e_ah=st.number_input("Act.h",0.0,200.0,_ah_def,step=0.5,key=f"etah_{t['id']}")
                             e_bl=st.text_input("Blocker",value=t.get("blocker_note") or "",key=f"etbl_{t['id']}")
                             sp_map={None:"— Backlog —"};sp_map.update({r["id"]:r["name"] for _,r in sdf.iterrows()} if not sdf.empty else {})
                             cur_spr=t["sprint_id"] if t["sprint_id"] in list(sp_map.keys()) else None
@@ -2211,37 +2222,22 @@ elif page == "Task Creation":
                                 # Email notification if task reassigned
                                 if e_a and e_a != t.get("assignee_id"):
                                     _nr = team[team["id"] == e_a]
-
                                     if not _nr.empty:
                                         _ne = _nr.iloc[0].get("email", "")
-
                                         if _ne:
-                                            _sl = (
-                                                sdf[sdf["id"] == e_spr2]["name"].values[0]
-                                                if (e_spr2 is not None and not sdf.empty)
-                                                else None
-                                            )
-
-                                            notify_member(
-                                                _ne,
-                                                f"[SprintAI] Task assigned to you: '{e_t}' — {proj_name}",
-                                                build_task_reassignment_email(
-                                                    e_t,
-                                                    e_p,
-                                                    e_s,
-                                                    _sl,
-                                                    e_eh,
-                                                    proj_name
-                                                )
-                                            )
-
+                                            _sl = (sdf[sdf["id"] == e_spr2]["name"].values[0] if (e_spr2 is not None and not sdf.empty) else None)
+                                            notify_member(_ne,f"[SprintAI] Task assigned to you: '{e_t}' — {proj_name}", build_task_reassignment_email(e_t,e_p,e_s,_sl,e_eh,proj_name))
                                 st.success("Saved!")
                                 st.rerun()
                             if dl.form_submit_button("🗑️"):
-                                if t.get("sprint_id"):
-                                    exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(int(t["story_points"]),int(t["sprint_id"])))
-                                    if t["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(t["story_points"]),int(t["sprint_id"])))
-                                exe("DELETE FROM tasks WHERE id=%s",(int(t["id"]),)); st.success("Deleted."); st.rerun()
+                                old_sprint_id = t.get("sprint_id")
+                                if pd.notna(old_sprint_id):
+                                    exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(int(t["story_points"]), int(old_sprint_id)))
+                                    if t["status"] == "Done":
+                                        exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(t["story_points"]), int(old_sprint_id)))
+                                exe("DELETE FROM tasks WHERE id=%s",(int(t["id"]),))
+                                st.success("Deleted!")
+                                st.rerun()
                     else:
                         sp_map={None:"— Backlog —"};sp_map.update({r["id"]:r["name"] for _,r in sdf.iterrows()} if not sdf.empty else {})
                         cur_spr=t["sprint_id"] if t["sprint_id"] in list(sp_map.keys()) else None
