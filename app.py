@@ -2204,7 +2204,7 @@ elif page == "Team":
     all_tasks=load_tasks(project_id=proj_id)
     act=load_active(proj_id)
     tasks_df=all_tasks[all_tasks["sprint_id"] == int(act["id"])] if (act and not all_tasks.empty) else pd.DataFrame()
-    ROLES=["Frontend Developer","Backend Developer","Full Stack Developer","ML Engineer","Data Scientist","DevOps Engineer","QA Engineer","Scrum Master","Product Owner","Tech Lead"]
+    ROLES=["Frontend Developer","Backend Developer","Full Stack Developer","ML Engineer","Database Engineer","Data Scientist","DevOps Engineer","QA Engineer","Scrum Master","Product Owner","Tech Lead"]
     AVCOLS=["#ec4899","#3b82f6","#10b981","#f59e0b","#8b5cf6","#06b6d4","#f43f5e","#84cc16"]
 
     if st.session_state.get("role") == "Manager":
