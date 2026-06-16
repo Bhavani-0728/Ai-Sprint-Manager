@@ -146,6 +146,42 @@ def create_tables(conn):
     
     conn.commit()
 
+    # ── Row Level Security (RLS) for member_comments ──────────────────────────
+    # Supabase flags any public table without RLS as a security warning.
+    # Enable RLS and grant full CRUD to authenticated users (access scoping is
+    # handled at the application layer via project_id / member_id filtering).
+    try:
+        cur.execute("ALTER TABLE member_comments ENABLE ROW LEVEL SECURITY;")
+
+        for policy in [
+            "allow_all_authenticated_select_member_comments",
+            "allow_all_authenticated_insert_member_comments",
+            "allow_all_authenticated_update_member_comments",
+            "allow_all_authenticated_delete_member_comments",
+        ]:
+            cur.execute(f"DROP POLICY IF EXISTS {policy} ON member_comments;")
+
+        cur.execute("""
+            CREATE POLICY allow_all_authenticated_select_member_comments
+            ON member_comments FOR SELECT TO authenticated USING (true);
+        """)
+        cur.execute("""
+            CREATE POLICY allow_all_authenticated_insert_member_comments
+            ON member_comments FOR INSERT TO authenticated WITH CHECK (true);
+        """)
+        cur.execute("""
+            CREATE POLICY allow_all_authenticated_update_member_comments
+            ON member_comments FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+        """)
+        cur.execute("""
+            CREATE POLICY allow_all_authenticated_delete_member_comments
+            ON member_comments FOR DELETE TO authenticated USING (true);
+        """)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"RLS setup warning for member_comments: {e}")
+
     # Dynamic migrations for legacy table columns (in case tables existed prior to mail/creator features)
     try:
         cur.execute("ALTER TABLE projects ADD COLUMN IF NOT EXISTS created_by VARCHAR(255)")

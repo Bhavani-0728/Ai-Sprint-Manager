@@ -1293,9 +1293,36 @@ def sbadge(s, auto=False):
     return f'<span class="badge {m.get(s,"s-todo")}">{i.get(s,"")} {s}</span>'
 
 def av_html(name, color="#3b82f6", size=26):
-    return (f'<div style="width:{size}px;height:{size}px;border-radius:50%;background:{color};'
-            f'display:inline-flex;align-items:center;justify-content:center;'
-            f'font-size:{int(size*.4)}px;font-weight:700;color:#fff;flex-shrink:0">{name[0].upper()}</div>')
+    try:
+        # Handle NaN, None, empty strings
+        if pd.isna(name) or not str(name).strip():
+            initial = "?"
+        else:
+            initial = str(name).strip()[0].upper()
+
+        # Safe fallback color
+        if pd.isna(color) or not str(color).strip():
+            color = "#8b949e"
+
+        return (
+            f'<div style="width:{size}px;height:{size}px;'
+            f'border-radius:50%;background:{color};'
+            f'display:inline-flex;align-items:center;'
+            f'justify-content:center;'
+            f'font-size:{int(size*.4)}px;'
+            f'font-weight:700;color:#fff;'
+            f'flex-shrink:0">{initial}</div>'
+        )
+
+    except Exception:
+        return (
+            f'<div style="width:{size}px;height:{size}px;'
+            f'border-radius:50%;background:#8b949e;'
+            f'display:inline-flex;align-items:center;'
+            f'justify-content:center;'
+            f'color:#fff;font-weight:700;'
+            f'flex-shrink:0">?</div>'
+        )
 
 def to_local_dt(dt_val):
     try:
@@ -2148,11 +2175,17 @@ elif page == "Task Creation":
                                 old_pts=int(t["story_points"])
                                 exe("UPDATE tasks SET title=%s,status=%s,priority=%s,assignee_id=%s,story_points=%s,estimated_hours=%s,actual_hours=%s,blocker_note=%s,sprint_id=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
                                     (e_t,e_s,e_p,e_a,e_sp2,e_eh,e_ah or None,e_bl or None,e_spr2,int(t["id"])))
-                                if t.get("sprint_id") and t["sprint_id"]!=e_spr2: exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(old_pts,int(t["sprint_id"])))
-                                if e_spr2 and e_spr2!=t.get("sprint_id"): exe("UPDATE sprints SET planned_points=planned_points+%s WHERE id=%s",(e_sp2,e_spr2))
-                                if e_s=="Done" and t["status"]!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(e_sp2,e_spr2))
-                                elif t["status"]=="Done" and e_s!="Done" and e_spr2: exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(e_sp2,e_spr2))
-                                log_activity(proj_id,opts2.get(e_a,"User").split(" (")[0],"updated",e_t,"status",t["status"],int(t["id"]),e_spr2,e_t)
+                                old_sprint_id = t.get("sprint_id")
+
+                                if pd.notna(old_sprint_id) and old_sprint_id != e_spr2:
+                                    exe(
+                                        "UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",
+                                        (old_pts, int(old_sprint_id))
+                                    )
+                                if pd.notna(e_spr2) and e_spr2 != t.get("sprint_id"): exe("UPDATE sprints SET planned_points=planned_points+%s WHERE id=%s",(e_sp2,e_spr2))
+                                if e_s=="Done" and t["status"]!="Done" and pd.notna(e_spr2): exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(e_sp2,e_spr2))
+                                elif t["status"]=="Done" and e_s!="Done" and pd.notna(e_spr2): exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(e_sp2,e_spr2))
+                                log_activity(proj_id,opts2.get(e_a, "User").split(" (")[0],"updated",e_t,"status",t["status"],e_s,int(t["id"]),e_spr2)
                                 st.success("Saved!"); st.rerun()
                             if dl.form_submit_button("🗑️"):
                                 if t.get("sprint_id"):
