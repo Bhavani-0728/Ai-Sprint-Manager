@@ -2132,7 +2132,7 @@ elif page == "Task Creation":
                                 (t_spr,proj_id,t_tit.strip(),t_des.strip(),t_as,t_pr,init,t_typ,t_sp,t_eh,t_tag.strip(),t_bl.strip() or None))
                         if t_spr: exe("UPDATE sprints SET planned_points=planned_points+%s WHERE id=%s",(t_sp,t_spr))
                         actor=opts2.get(t_as,"User").split(" (")[0]
-                        log_activity(proj_id,actor,"created",t_tit.strip(),"status","Todo",nid,t_spr,t_tit.strip())
+                        log_activity(proj_id,actor,"created",t_tit.strip(),"status","","Todo",nid,t_spr)
                         c1,c2,c3=st.columns(3)
                         c1.metric("AI Predicted",f"{pred}h"); c2.metric("Your Estimate",f"{t_eh}h"); c3.metric("Difference",f"{pred-t_eh:+.1f}h")
                         risk4=risk_det.assess_task_risk({"priority":t_pr,"status":init,"story_points":t_sp,"estimated_hours":t_eh,"assignee_id":t_as},vel3,7)
