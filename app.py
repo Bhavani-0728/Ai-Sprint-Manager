@@ -1873,7 +1873,7 @@ elif page == "Board":
                     if ns!=cur["status"]:
                         if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(int(cur["story_points"]),sid))
                         elif cur["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(cur["story_points"]),sid))
-                    log_activity(proj_id,"User","updated",sel_t,"status",cur["status"],int(cur["id"]),sid,sel_t)
+                    log_activity(project_id=proj_id,actor="User",action="updated",task_title=sel_t,field_changed="status",old_value=cur["status"],new_value="updated",task_id=int(cur["id"]),sprint_id=sid)
                     # ── Email: notify manager of task status change ──
                     if ns != cur["status"]:
                         print(f"[SprintAI] Status changed {cur['status']} → {ns}, manager_email={manager_email!r}")
