@@ -1869,11 +1869,14 @@ elif page == "Board":
                 if st.form_submit_button("💾 Save",type="primary"):
                     exe("UPDATE tasks SET status=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
                         (ns,na if na > 0.0 else None,nb or None,tid))
+                    # Clear stale query cache so st.rerun() fetches fresh data from DB
+                    _qry_cached.clear()
+                    get_sprint_scan_cached.clear()
 
                     if ns!=cur["status"]:
                         if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(int(cur["story_points"]),sid))
                         elif cur["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(cur["story_points"]),sid))
-                    log_activity(project_id=proj_id,actor="User",action="updated",task_title=sel_t,field_changed="status",old_value=cur["status"],new_value="updated",task_id=int(cur["id"]),sprint_id=sid)
+                    log_activity(project_id=proj_id,actor=st.session_state.get("user_name") or "User",action="updated",task_title=sel_t,field_changed="status",old_value=cur["status"],new_value=ns,task_id=int(cur["id"]),sprint_id=sid)
                     # ── Email: notify manager of task status change ──
                     if ns != cur["status"]:
                         print(f"[SprintAI] Status changed {cur['status']} → {ns}, manager_email={manager_email!r}")

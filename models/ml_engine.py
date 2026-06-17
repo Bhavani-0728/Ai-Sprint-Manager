@@ -125,11 +125,14 @@ class AutoBlockerDetector:
         today = date.today()
 
         # ── Rule 1: Stagnation — In Progress but not updated in 2+ days ────────
+        # Skip stagnation check if task was updated today (user just changed status)
         if status == "In Progress" and updated_at:
             try:
                 last_update = datetime.strptime(str(updated_at)[:10], "%Y-%m-%d").date()
                 stale_days  = (today - last_update).days
-                if stale_days >= 3:
+                if stale_days == 0:
+                    pass  # Updated today — do not flag as stagnant
+                elif stale_days >= 3:
                     auto_blocked = True
                     delay_days  += stale_days
                     reasons.append(f"🕐 In Progress for {stale_days} days with no update — likely stalled")
@@ -148,26 +151,41 @@ class AutoBlockerDetector:
             suggestions.append("Re-estimate task and consider splitting into subtasks")
 
         # ── Rule 3: Not started + sprint deadline near ──────────────────────────
+        # Only flag tasks that are truly untouched (updated_at == created_at or no update).
+        # Skip if the user has recently updated the task (updated today or yesterday).
         if status == "Todo" and sprint_remaining_days <= 3:
-            auto_blocked = True
-            delay_days  += max(0, int(est_hours / 8) - sprint_remaining_days)
-            reasons.append(f"⏰ Task not started with only {sprint_remaining_days} day(s) left in sprint")
-            suggestions.append("Descope to next sprint or assign immediately")
+            try:
+                upd = datetime.strptime(str(updated_at)[:10], "%Y-%m-%d").date() if updated_at else None
+                recently_touched = upd is not None and (today - upd).days <= 1
+            except:
+                recently_touched = False
+            if not recently_touched:
+                auto_blocked = True
+                delay_days  += max(0, int(est_hours / 8) - sprint_remaining_days)
+                reasons.append(f"⏰ Task not started with only {sprint_remaining_days} day(s) left in sprint")
+                suggestions.append("Descope to next sprint or assign immediately")
 
         # ── Rule 4: High/Critical + Todo + past halfway point ──────────────────
+        # Skip if user recently updated the task (today or yesterday)
         if status == "Todo" and priority in ("Critical","High"):
             sprint_start = sprint.get("start_date","")
             sprint_end_d = sprint.get("end_date","")
             try:
-                s_start = datetime.strptime(str(sprint_start)[:10], "%Y-%m-%d").date()
-                s_end   = datetime.strptime(str(sprint_end_d)[:10], "%Y-%m-%d").date()
-                total_days   = max((s_end - s_start).days, 1)
-                elapsed_days = (today - s_start).days
-                if elapsed_days > total_days * 0.6:
-                    auto_blocked = True
-                    reasons.append(f"🚨 {priority} task still unstarted at {int(elapsed_days/total_days*100)}% of sprint")
-                    suggestions.append("Assign immediately or escalate to Scrum Master")
-            except: pass
+                upd4 = datetime.strptime(str(updated_at)[:10], "%Y-%m-%d").date() if updated_at else None
+                recently_touched4 = upd4 is not None and (today - upd4).days <= 1
+            except:
+                recently_touched4 = False
+            if not recently_touched4:
+                try:
+                    s_start = datetime.strptime(str(sprint_start)[:10], "%Y-%m-%d").date()
+                    s_end   = datetime.strptime(str(sprint_end_d)[:10], "%Y-%m-%d").date()
+                    total_days   = max((s_end - s_start).days, 1)
+                    elapsed_days = (today - s_start).days
+                    if elapsed_days > total_days * 0.6:
+                        auto_blocked = True
+                        reasons.append(f"🚨 {priority} task still unstarted at {int(elapsed_days/total_days*100)}% of sprint")
+                        suggestions.append("Assign immediately or escalate to Scrum Master")
+                except: pass
 
         # ── Rule 5: Estimated hours > remaining sprint capacity ─────────────────
         if sprint_remaining_days > 0 and est_hours:
