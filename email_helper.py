@@ -12,8 +12,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SMTP_EMAIL    = os.getenv("SMTP_EMAIL", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+def _get_secret(key, default=""):
+    """Read from env var first, then st.secrets (Streamlit Cloud), then default."""
+    val = os.getenv(key, "")
+    if not val:
+        try:
+            import streamlit as st
+            val = st.secrets.get(key, default)
+        except Exception:
+            val = default
+    return val or default
+
+SMTP_EMAIL    = _get_secret("SMTP_EMAIL")
+SMTP_PASSWORD = _get_secret("SMTP_PASSWORD")
 SMTP_HOST     = "smtp.gmail.com"
 SMTP_PORT     = 587
 SMTP_TIMEOUT  = 10   # seconds — keeps UI responsive
