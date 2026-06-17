@@ -46,9 +46,27 @@ class CompletionTimePredictor:
     def train_from_df(self, df):
         if len(df) < 5:
             return False
+        df = df.copy()
+        # Remove invalid training rows
+        df["actual_hours"] = pd.to_numeric(df["actual_hours"], errors="coerce")
+        df = df.dropna(subset=["actual_hours"])
+
+        if len(df) < 5:
+            return False
+
         df["priority_enc"] = df["priority"].apply(_encode_priority)
-        feats = ["story_points","estimated_hours","priority_enc","velocity_avg","planned_points"]
-        X = df[feats].fillna(df[feats].mean())
+
+        feats = [
+            "story_points",
+            "estimated_hours",
+            "priority_enc",
+            "velocity_avg",
+            "planned_points"
+        ]
+
+        X = df[feats].apply(pd.to_numeric, errors="coerce")
+        X = X.fillna(X.mean())
+
         y = df["actual_hours"]
         if len(X) >= 6:
             Xtr,Xte,ytr,yte = train_test_split(X, y, test_size=0.25, random_state=42)
