@@ -12,17 +12,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def _get_secret(key, default=""):
-    """Read from env var first, then st.secrets (Streamlit Cloud), then default."""
+def _get_secret(key: str, default: str = "") -> str:
+    """Read a secret from environment variables first, then st.secrets as fallback."""
     val = os.getenv(key, "")
-    if not val:
-        try:
-            import streamlit as st
-            val = st.secrets.get(key, default)
-        except Exception:
-            val = default
-    return val or default
-
+    if val:
+        return val
+    # Fallback: try Streamlit secrets (works on Streamlit Cloud)
+    try:
+        import streamlit as st
+        return st.secrets.get(key, default)
+    except Exception:
+        return default
 SMTP_EMAIL    = _get_secret("SMTP_EMAIL")
 SMTP_PASSWORD = _get_secret("SMTP_PASSWORD")
 SMTP_HOST     = "smtp.gmail.com"
