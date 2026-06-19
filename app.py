@@ -1886,10 +1886,21 @@ elif page == "Board":
                 nb = uc3.text_input("Blocker Note", value=cur.get("blocker_note") or "")
 
                 if st.form_submit_button("💾 Save", type="primary"):
-                    exe(
-                        "UPDATE tasks SET status=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-                        (ns, na or None, nb or None, tid)
-                    )
+
+                    if ns == "Done" and na <= 0:
+                        st.error("Please enter Actual Hours before marking task as Done.")
+
+                    else:
+                        exe(
+                            "UPDATE tasks SET status=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+                            (ns, na, nb or None, tid)
+                        )
+
+                        _qry_cached.clear()
+                        get_sprint_scan_cached.clear()
+
+                        st.success("Saved!")
+                        st.rerun()
 
                     if ns != cur["status"]:
                         pts = int(cur["story_points"])
@@ -1922,7 +1933,7 @@ elif page == "Board":
         with cws[idx]:
             col_t = [t for t in tasks if t["status"] == status]
             pts = sum(t["story_points"] for t in col_t)
-            bc = BORDS[status]
+            bc = BORDS[status]  
 
             st.markdown(f"""
                 <div style="background:#161b22;border:1px solid {bc}50;border-top:3px solid {bc};
