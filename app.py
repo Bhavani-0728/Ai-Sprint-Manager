@@ -81,7 +81,7 @@ def set_cookie(name, value, days=None):
         window.parent.document.cookie = "{name}=" + "{cookie_val}" + "; path=/; SameSite=Lax";
         </script>
         """
-    components.html(js, height=0, width=0)
+    st.iframe(srcdoc=js, height=0, width=0)
 
 def delete_cookie(name):
     js = f"""
@@ -89,7 +89,8 @@ def delete_cookie(name):
     window.parent.document.cookie = "{name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     </script>
     """
-    components.html(js, height=0, width=0)
+    st.iframe(srcdoc=js, height=0, width=0)
+
 
 def create_session_token(email, role, name):
     data = {
@@ -2226,7 +2227,7 @@ elif page == "Task Creation":
                             e_sp2=st.selectbox("Pts",[1,2,3,5,8,13],index=[1,2,3,5,8,13].index(int(t["story_points"])) if int(t["story_points"]) in [1,2,3,5,8,13] else 2,key=f"etsp_{_tid}")
                             e_eh=st.number_input("Est.h",0.5,200.0,_eh_def,step=0.5,key=f"eteh_{_tid}")
                             e_ah=st.number_input("Act.h",0.0,200.0,_ah_def,step=0.5,key=f"etah_{_tid}")
-                            e_bl=st.text_input("Blocker",value=str(t.get("blocker_note") or ""),key=f"etbl_{_tid}")
+                            e_bl=st.text_input("Blocker", value="", key=f"etbl_{_tid}")
                             sp_map={None:"— Backlog —"};sp_map.update({r["id"]:r["name"] for _,r in sdf.iterrows()} if not sdf.empty else {})
                             cur_spr=t["sprint_id"] if t["sprint_id"] in list(sp_map.keys()) else None
                             e_spr2=st.selectbox("Sprint",list(sp_map.keys()),format_func=lambda x:sp_map[x],index=list(sp_map.keys()).index(cur_spr),key=f"etspr_{_tid}")
