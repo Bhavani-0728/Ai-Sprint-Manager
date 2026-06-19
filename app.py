@@ -1866,12 +1866,22 @@ elif page == "Board":
                 _ah_default = 0.0 if (_cur_ah is None or (isinstance(_cur_ah, float) and pd.isna(_cur_ah))) else float(_cur_ah)
                 na=uc2.number_input("Actual Hours",0.0,200.0,_ah_default,step=0.5,key=f"ah_{tid}")
                 nb=uc3.text_input("Blocker Note",value=cur.get("blocker_note") or "")
-                if st.form_submit_button("💾 Save",type="primary"):
-                    exe("UPDATE tasks SET status=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-                        (ns,na if na > 0.0 else None,nb or None,tid))
-                    # Clear stale query cache so st.rerun() fetches fresh data from DB
-                    _qry_cached.clear()
-                    get_sprint_scan_cached.clear()
+                if st.form_submit_button("💾 Save", type="primary"):
+
+                    if ns == "Done" and na <= 0:
+                        st.error("Please enter Actual Hours before marking task as Done.")
+
+                    else:
+                        exe(
+                            "UPDATE tasks SET status=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+                            (ns, na, nb or None, tid)
+                        )
+
+                        _qry_cached.clear()
+                        get_sprint_scan_cached.clear()
+
+                        st.success("Saved!")
+                        st.rerun()
 
                     if ns!=cur["status"]:
                         if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(int(cur["story_points"]),sid))
