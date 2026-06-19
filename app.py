@@ -981,8 +981,7 @@ def get_predictor_for_project(project_id):
         FROM tasks t
         JOIN sprints s ON t.sprint_id = s.id
         JOIN team_members tm ON t.assignee_id = tm.id
-        WHERE t.actual_hours IS NOT NULL
-          AND s.status = 'Completed'
+        WHERE t.actual_hours > 0 AND s.status = 'Completed'
           AND s.project_id = %s
     """, conn, params=[project_id])
     conn.close()
@@ -1828,117 +1827,136 @@ elif page == "Board":
     if "board_sprint_id" not in st.session_state or st.session_state.board_sprint_id != sid:
         st.session_state.board_sprint_id = sid
         st.session_state.board_limits = {"Todo": 20, "In Progress": 20, "Done": 20, "Blocked": 20}
+        # Clear stale Board-form widget keys so fresh DB values are used
+        for _k in list(st.session_state.keys()):
+            if _k.startswith("bu_"):
+                del st.session_state[_k]
     st.caption(f"📅 {srow['start_date']} → {srow['end_date']}  ·  Status: **{srow['status']}**  ·  Goal: *{srow.get('goal') or '—'}*")
 
     tdf=load_tasks(sprint_id=sid); tasks=tdf.to_dict("records")
 
-    # Auto-detect
-    scan2={}
+    # Auto-detect (highlighting) for Board UI.
+    # To keep the editor stable, disable auto-detection highlighting during
+    # the board status editor render cycle.
+    scan2 = {}
     if not tdf.empty:
-        sc=get_sprint_scan_cached(sid)
-        if sc["auto_blocked_count"] or sc["delayed_count"]:
-            st.markdown(f"""
-            <div style="background:#1a0b0b;border:1px solid #f8514960;border-radius:8px;
-                 padding:10px 16px;margin-bottom:12px;display:flex;gap:20px;align-items:center">
-              <span style="color:#f85149;font-weight:700">🤖 AI Detected:</span>
-              {'<span style="color:#f85149;font-size:13px">⛔ '+str(sc["auto_blocked_count"])+' auto-flagged</span>' if sc["auto_blocked_count"] else ''}
-              {'<span style="color:#d29922;font-size:13px">⏰ '+str(sc["delayed_count"])+' delayed</span>' if sc["delayed_count"] else ''}
-              {'<span style="color:#fbbf24;font-size:13px">⚠️ '+str(sc["at_risk_count"])+' at risk</span>' if sc["at_risk_count"] else ''}
-              <span style="color:#8b949e;font-size:12px">See AI Insights tab for details →</span>
-            </div>""", unsafe_allow_html=True)
-        for t in sc["tasks"]:
-            scan2[t["id"]] = t["auto_detection"]
+        edit_mode = any(
+            k.startswith("bu_status_") or k.startswith("bu_ah_") or k.startswith("bu_bl_")
+            for k in st.session_state.keys()
+        )
+        if not edit_mode:
+            sc = get_sprint_scan_cached(sid)
+            if sc["auto_blocked_count"] or sc["delayed_count"]:
+                st.markdown(f"""
+                <div style="background:#1a0b0b;border:1px solid #f8514960;border-radius:8px;
+                     padding:10px 16px;margin-bottom:12px;display:flex;gap:20px;align-items:center">
+                  <span style="color:#f85149;font-weight:700">🤖 AI Detected:</span>
+                  {'<span style="color:#f85149;font-size:13px">⛔ '+str(sc["auto_blocked_count"])+' auto-flagged</span>' if sc["auto_blocked_count"] else ''}
+                  {'<span style="color:#d29922;font-size:13px">⏰ '+str(sc["delayed_count"])+' delayed</span>' if sc["delayed_count"] else ''}
+                  {'<span style="color:#fbbf24;font-size:13px">⚠️ '+str(sc["at_risk_count"])+' at risk</span>' if sc["at_risk_count"] else ''}
+                  <span style="color:#8b949e;font-size:12px">See AI Insights tab for details →</span>
+                </div>""", unsafe_allow_html=True)
+            for t in sc["tasks"]:
+                scan2[t["id"]] = t["auto_detection"]
+
 
     with st.expander("✏️ Update Task Status / Log Hours"):
-        if tdf.empty: st.caption("No tasks.")
+        if tdf.empty:
+            st.caption("No tasks.")
         else:
-            with st.form("bu"):
-                titles=tdf["title"].tolist(); ids=tdf["id"].tolist()
-                sel_t=st.selectbox("Task",titles); tid=ids[titles.index(sel_t)]
-                cur=tdf[tdf["id"]==tid].iloc[0]
-                uc1,uc2,uc3=st.columns(3)
-                ns=uc1.selectbox("Status",["Todo","In Progress","Done","Blocked"],index=["Todo","In Progress","Done","Blocked"].index(cur["status"]))
-                # Fix: pd.isna() correctly handles NaN (pandas NULL). Using `or 0.0`
-                # is wrong because float('nan') is truthy in Python, which meant
-                # NaN was passed to number_input instead of 0.0, causing Streamlit
-                # to fall back to stale session state (sometimes = estimated_hours).
-                _cur_ah = cur.get("actual_hours")
-                _ah_default = 0.0 if (_cur_ah is None or (isinstance(_cur_ah, float) and pd.isna(_cur_ah))) else float(_cur_ah)
-                na=uc2.number_input("Actual Hours",0.0,200.0,_ah_default,step=0.5,key=f"ah_{tid}")
-                nb=uc3.text_input("Blocker Note",value=cur.get("blocker_note") or "")
+            with st.form(f"bu_{proj_id}_{sid}"):
+                titles = tdf["title"].tolist(); ids = tdf["id"].tolist()
+                sel_t = st.selectbox("Task", titles)
+                tid = ids[titles.index(sel_t)]
+                cur = tdf[tdf["id"] == tid].iloc[0]
+
+                uc1, uc2, uc3 = st.columns(3)
+                ns = uc1.selectbox(
+                    "Status",
+                    ["Todo", "In Progress", "Done", "Blocked"],
+                    index=["Todo", "In Progress", "Done", "Blocked"].index(cur["status"])
+                )
+                na = uc2.number_input(
+                    "Actual Hours",
+                    0.0,
+                    200.0,
+                    float(cur.get("actual_hours") or 0.0),
+                    step=0.5
+                )
+                nb = uc3.text_input("Blocker Note", value=cur.get("blocker_note") or "")
+
                 if st.form_submit_button("💾 Save", type="primary"):
+                    exe(
+                        "UPDATE tasks SET status=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+                        (ns, na or None, nb or None, tid)
+                    )
 
-                    if ns == "Done" and na <= 0:
-                        st.error("Please enter Actual Hours before marking task as Done.")
-
-                    else:
-                        exe(
-                            "UPDATE tasks SET status=%s,actual_hours=%s,blocker_note=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-                            (ns, na, nb or None, tid)
-                        )
-
-                        _qry_cached.clear()
-                        get_sprint_scan_cached.clear()
-
-                        st.success("Saved!")
-                        st.rerun()
-
-                    if ns!=cur["status"]:
-                        if ns=="Done":    exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s",(int(cur["story_points"]),sid))
-                        elif cur["status"]=="Done": exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s",(int(cur["story_points"]),sid))
-                    log_activity(project_id=proj_id,actor=st.session_state.get("user_name") or "User",action="updated",task_title=sel_t,field_changed="status",old_value=cur["status"],new_value=ns,task_id=int(cur["id"]),sprint_id=sid)
-                    # ── Email: notify manager of task status change ──
                     if ns != cur["status"]:
-                        print(f"[SprintAI] Status changed {cur['status']} → {ns}, manager_email={manager_email!r}")
-                        if manager_email:
-                            _user_email = (st.session_state.get("user") or "").lower()
-                            _updater_row = team[team["email"].fillna("").str.lower() == _user_email] if not team.empty else pd.DataFrame()
-                            _updater_name = _updater_row.iloc[0]["name"] if not _updater_row.empty else _user_email or "A member"
-                            print(f"[SprintAI] Sending status email to manager: {manager_email}, from: {_updater_name}")
-                            notify_manager(manager_email,
-                                           f"[SprintAI] {_updater_name} updated task status — {proj_name}",
-                                           build_task_status_email(_updater_name, sel_t, cur["status"], ns, srow["name"], proj_name, nb.strip()))
-                    st.success("Updated!"); st.rerun()
+                        pts = int(cur["story_points"])
+                        if ns == "Done":
+                            exe("UPDATE sprints SET completed_points=completed_points+%s WHERE id=%s", (pts, sid))
+                        elif cur["status"] == "Done":
+                            exe("UPDATE sprints SET completed_points=GREATEST(0,completed_points-%s) WHERE id=%s", (pts, sid))
+
+                    log_activity(
+                        project_id=int(proj_id),
+                        actor="User",
+                        action="updated",
+                        task_title=str(sel_t),
+                        field_changed="status",
+                        old_value=str(cur["status"]),
+                        new_value=str(ns),
+                        task_id=int(cur["id"]),
+                        sprint_id=int(sid)
+                    )
+                    st.success("Updated!")
+                    st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
-    COLS=["Todo","In Progress","Done","Blocked"]
-    BORDS={"Todo":"#475569","In Progress":"#2563eb","Done":"#059669","Blocked":"#dc2626"}
-    cws=st.columns(4)
-    for idx,status in enumerate(COLS):
-        col_t=[t for t in tasks if t["status"]==status]; pts=sum(t["story_points"] for t in col_t); bc=BORDS[status]
+
+    COLS = ["Todo", "In Progress", "Done", "Blocked"]
+    BORDS = {"Todo": "#475569", "In Progress": "#2563eb", "Done": "#059669", "Blocked": "#dc2626"}
+    cws = st.columns(4)
+
+    for idx, status in enumerate(COLS):
         with cws[idx]:
+            col_t = [t for t in tasks if t["status"] == status]
+            pts = sum(t["story_points"] for t in col_t)
+            bc = BORDS[status]
+
             st.markdown(f"""
-            <div style="background:#161b22;border:1px solid {bc}50;border-top:3px solid {bc};
-                 border-radius:8px;padding:8px 12px;margin-bottom:8px;
-                 display:flex;justify-content:space-between;align-items:center">
-              <span style="color:#e6edf3;font-weight:600;font-size:13px">{status}</span>
-              <span style="background:{bc}25;border-radius:10px;padding:1px 8px;font-size:11px;color:#c9d1d9">{len(col_t)}·{pts}pt</span>
-            </div>""", unsafe_allow_html=True)
+                <div style="background:#161b22;border:1px solid {bc}50;border-top:3px solid {bc};
+                            border-radius:8px;padding:8px 12px;margin-bottom:8px;
+                            display:flex;justify-content:space-between;align-items:center">
+                  <span style="color:#e6edf3;font-weight:600;font-size:13px">{status}</span>
+                  <span style="background:{bc}25;border-radius:10px;padding:1px 8px;font-size:11px;color:#c9d1d9">{len(col_t)}·{pts}pt</span>
+                </div>""", unsafe_allow_html=True)
 
             if not col_t:
-                st.markdown('<div style="color:#30363d;text-align:center;padding:28px;font-size:12px;border:1px dashed #21262d;border-radius:6px">— empty —</div>',unsafe_allow_html=True)
+                st.markdown('<div style="color:#30363d;text-align:center;padding:28px;font-size:12px;border:1px dashed #21262d;border-radius:6px">— empty —</div>', unsafe_allow_html=True)
 
-            limit = st.session_state.board_limits.get(status, 20)
-            displayed_tasks = col_t[:limit]
+            for t in col_t:
+                det2 = scan2.get(t["id"], {})
+                ab2 = det2.get("auto_blocked", False)
+                dr2 = det2.get("delay_risk", "none")
+                ai_reasons = det2.get("reasons", [])
 
-            for t in displayed_tasks:
-                det2=scan2.get(t["id"],{})
-                ab2=det2.get("auto_blocked",False); dr2=det2.get("delay_risk","none")
-                ai_reasons=det2.get("reasons",[])
                 bord_c = "#e879f9" if ab2 else "#f85149" if dr2 == "delayed" else "#d29922" if dr2 == "at_risk" else "#3b82f640"
-                
-                # AI Indicator Styling
+
                 if ab2:
-                    ai_banner='<div style="color:#e879f9;font-size:10.5px;margin-top:6px;font-weight:600;">🤖 AI: Auto-blocked</div>'
-                elif dr2=="delayed":
-                    ai_banner=f'<div style="color:#f85149;font-size:10.5px;margin-top:6px;font-weight:600;">⏰ Delayed ~{det2.get("delay_days",0)}d</div>'
-                elif dr2=="at_risk":
-                    ai_banner=f'<div style="color:#d29922;font-size:10.5px;margin-top:6px;font-weight:600;">⚠️ {ai_reasons[0] if ai_reasons else "At risk"}</div>'
+                    ai_banner = '<div style="color:#e879f9;font-size:10px;margin-top:3px">🤖 AI: Auto-flagged as blocked</div>'
+                elif dr2 == "delayed":
+                    ai_banner = f'<div style="color:#f85149;font-size:10px;margin-top:3px">⏰ Delayed ~{det2.get("delay_days", 0)}d</div>'
+                elif dr2 == "at_risk":
+                    ai_banner = f'<div style="color:#d29922;font-size:10px;margin-top:3px">⚠️ {ai_reasons[0] if ai_reasons else "At risk"}</div>'
                 else:
-                    ai_banner=""
-                
-                blk_note=f'<div style="color:#f85149;font-size:10.5px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);font-weight:600;">⛔ {t["blocker_note"]}</div>' if t.get("blocker_note") else ""
-                av=t.get("assignee_name") or "Unassigned"; avc=t.get("avatar_color") or "#8b949e"
+                    ai_banner = ""
+
+                blk_note = f'<div style="color:#f85149;font-size:10px;margin-top:3px;padding-top:3px;border-top:1px solid #30363d">⛔ {t["blocker_note"]}</div>' if t.get("blocker_note") else ""
+
+                av = t.get("assignee_name") or "Unassigned"
+                avc = t.get("avatar_color") or "#8b949e"
+
                 st.markdown(
                     f'<div style="background:#161b22;border:1px solid {bord_c};border-radius:6px;padding:10px 12px;margin-bottom:6px">'
                     f'<div style="color:#e6edf3;font-weight:500;font-size:13px;margin-bottom:5px">{t["title"]}</div>'
@@ -1948,30 +1966,6 @@ elif page == "Board":
                     f'</div>',
                     unsafe_allow_html=True
                 )
-
-            if len(col_t) > limit:
-                if st.button(f"Show More (+{len(col_t) - limit})", key=f"more_{status}_{sid}", use_container_width=True):
-                    st.session_state.board_limits[status] = limit + 20
-                    st.rerun()
-                
-                # Priority Border Colors
-                p_c = {"Critical": "#f85149", "High": "#d29922", "Medium": "#58a6ff", "Low": "#8b949e"}.get(t["priority"], "#8b949e")
-                due_date_str = f' · 📅 {t["due_date"]}' if t.get("due_date") else ""
-                
-                st.markdown(f"""
-                <div class="card" style="border-left: 4px solid {p_c}; margin-bottom: 8px; padding: 12px 14px; background: rgba(22, 27, 34, 0.45); border-color: rgba(255, 255, 255, 0.05);">
-                    <div style="color:#e6edf3; font-weight:600; font-size:12.5px; line-height:1.4; margin-bottom:6px;">{t["title"]}</div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            {av_html(av, avc, 18)}
-                            <span style="color:#8b949e; font-size:11px;">{av}</span>
-                        </div>
-                        <span style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:4px; padding:2px 6px; font-size:10px; color:#c9d1d9; font-weight:600;">{t["story_points"]}pt{due_date_str}</span>
-                    </div>
-                    {ai_banner}
-                    {blk_note}
-                </div>
-                """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -2141,8 +2135,8 @@ elif page == "Task Creation":
                             if not sr3.empty: cap=int(sr3["planned_points"].values[0])
                         pred=get_predictor_for_project(proj_id)[0].predict(t_sp,t_eh,t_pr,vel3,cap)
                         init="Blocked" if t_bl.strip() else "Todo"
-                        nid=exe("INSERT INTO tasks(sprint_id,project_id,title,description,assignee_id,priority,status,issue_type,story_points,estimated_hours,tags,blocker_note)VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                                (t_spr,proj_id,t_tit.strip(),t_des.strip(),t_as,t_pr,init,t_typ,t_sp,t_eh,t_tag.strip(),t_bl.strip() or None))
+                        nid=exe("INSERT INTO tasks(sprint_id,project_id,title,description,assignee_id,priority,status,issue_type,story_points,estimated_hours,actual_hours,tags,blocker_note)VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                                (t_spr,proj_id,t_tit.strip(),t_des.strip(),t_as,t_pr,init,t_typ,t_sp,t_eh,0.0,t_tag.strip(),t_bl.strip() or None))
                         if t_spr: exe("UPDATE sprints SET planned_points=planned_points+%s WHERE id=%s",(t_sp,t_spr))
                         actor=opts2.get(t_as,"User").split(" (")[0]
                         log_activity(proj_id,actor,"created",t_tit.strip(),"status","","Todo",nid,t_spr)
@@ -2199,26 +2193,37 @@ elif page == "Task Creation":
                 with dc2:
                     if st.session_state.get("role") == "Manager":
                         with st.form(f"te_{t['id']}"):
-                            e_t=st.text_input("Title",value=t["title"],key=f"ett_{t['id']}")
-                            e_s=st.selectbox("Status",["Todo","In Progress","Done","Blocked"],index=["Todo","In Progress","Done","Blocked"].index(t["status"]),key=f"ets_{t['id']}")
-                            e_p=st.selectbox("Priority",["Low","Medium","High","Critical"],index=["Low","Medium","High","Critical"].index(t["priority"]),key=f"etp_{t['id']}")
-                            e_a=st.selectbox("Assignee",list(opts2.keys()),format_func=lambda x:opts2[x],index=list(opts2.keys()).index(t["assignee_id"]) if t["assignee_id"] in list(opts2.keys()) else 0,key=f"eta_{t['id']}")
-                            e_sp2=st.selectbox("Pts",[1,2,3,5,8,13],index=[1,2,3,5,8,13].index(int(t["story_points"])) if int(t["story_points"]) in [1,2,3,5,8,13] else 2,key=f"etsp_{t['id']}")
+                            # Force-sync widget session state with fresh DB values
+                            # to prevent stale values from previous renders
+                            _tid = int(t['id'])
+                            st.session_state[f"ett_{_tid}"] = t["title"]
+                            st.session_state[f"ets_{_tid}"] = t["status"]
+                            st.session_state[f"etp_{_tid}"] = t["priority"]
+                            if t["assignee_id"] in list(opts2.keys()):
+                                st.session_state[f"eta_{_tid}"] = t["assignee_id"]
                             _t_eh = t.get("estimated_hours")
                             _eh_def = 2.0 if (_t_eh is None or (isinstance(_t_eh, float) and pd.isna(_t_eh))) else float(_t_eh)
-                            e_eh=st.number_input("Est.h",0.5,200.0,_eh_def,step=0.5,key=f"eteh_{t['id']}")
                             _t_ah = t.get("actual_hours")
                             _ah_def = 0.0 if (_t_ah is None or (isinstance(_t_ah, float) and pd.isna(_t_ah))) else float(_t_ah)
-                            e_ah=st.number_input("Act.h",0.0,200.0,_ah_def,step=0.5,key=f"etah_{t['id']}")
-                            e_bl=st.text_input("Blocker",value=t.get("blocker_note") or "",key=f"etbl_{t['id']}")
+                            st.session_state[f"eteh_{_tid}"] = _eh_def
+                            st.session_state[f"etah_{_tid}"] = _ah_def
+                            st.session_state[f"etbl_{_tid}"] = t.get("blocker_note") or ""
+                            e_t=st.text_input("Title",value=t["title"],key=f"ett_{_tid}")
+                            e_s=st.selectbox("Status",["Todo","In Progress","Done","Blocked"],index=["Todo","In Progress","Done","Blocked"].index(t["status"]),key=f"ets_{_tid}")
+                            e_p=st.selectbox("Priority",["Low","Medium","High","Critical"],index=["Low","Medium","High","Critical"].index(t["priority"]),key=f"etp_{_tid}")
+                            e_a=st.selectbox("Assignee",list(opts2.keys()),format_func=lambda x:opts2[x],index=list(opts2.keys()).index(t["assignee_id"]) if t["assignee_id"] in list(opts2.keys()) else 0,key=f"eta_{_tid}")
+                            e_sp2=st.selectbox("Pts",[1,2,3,5,8,13],index=[1,2,3,5,8,13].index(int(t["story_points"])) if int(t["story_points"]) in [1,2,3,5,8,13] else 2,key=f"etsp_{_tid}")
+                            e_eh=st.number_input("Est.h",0.5,200.0,_eh_def,step=0.5,key=f"eteh_{_tid}")
+                            e_ah=st.number_input("Act.h",0.0,200.0,_ah_def,step=0.5,key=f"etah_{_tid}")
+                            e_bl=st.text_input("Blocker",value=t.get("blocker_note") or "",key=f"etbl_{_tid}")
                             sp_map={None:"— Backlog —"};sp_map.update({r["id"]:r["name"] for _,r in sdf.iterrows()} if not sdf.empty else {})
                             cur_spr=t["sprint_id"] if t["sprint_id"] in list(sp_map.keys()) else None
-                            e_spr2=st.selectbox("Sprint",list(sp_map.keys()),format_func=lambda x:sp_map[x],index=list(sp_map.keys()).index(cur_spr),key=f"etspr_{t['id']}")
+                            e_spr2=st.selectbox("Sprint",list(sp_map.keys()),format_func=lambda x:sp_map[x],index=list(sp_map.keys()).index(cur_spr),key=f"etspr_{_tid}")
                             sv,dl=st.columns(2)
                             if sv.form_submit_button("💾",type="primary"):
                                 old_pts=int(t["story_points"])
                                 exe("UPDATE tasks SET title=%s,status=%s,priority=%s,assignee_id=%s,story_points=%s,estimated_hours=%s,actual_hours=%s,blocker_note=%s,sprint_id=%s,updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-                                    (e_t,e_s,e_p,e_a,e_sp2,e_eh,e_ah or None,e_bl or None,e_spr2,int(t["id"])))
+                                    (e_t,e_s,e_p,e_a,e_sp2,e_eh,e_ah,e_bl or None,e_spr2,int(t["id"])))
                                 old_sprint_id = t.get("sprint_id")
                                 if pd.notna(old_sprint_id) and old_sprint_id != e_spr2:
                                     exe("UPDATE sprints SET planned_points=GREATEST(0,planned_points-%s) WHERE id=%s",(old_pts, int(old_sprint_id)))

@@ -74,7 +74,7 @@ def create_tables(conn):
         issue_type VARCHAR(50) DEFAULT 'Task',
         story_points INTEGER DEFAULT 1,
         estimated_hours REAL,
-        actual_hours REAL,
+        actual_hours REAL NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         tags VARCHAR(255),
@@ -196,6 +196,16 @@ def create_tables(conn):
     except Exception as e:
         conn.rollback()
         print(f"Migration warning team_members.email: {e}")
+
+    # Backfill any existing NULL actual_hours to 0 and set column default
+    try:
+        cur.execute("UPDATE tasks SET actual_hours = 0 WHERE actual_hours IS NULL")
+        cur.execute("ALTER TABLE tasks ALTER COLUMN actual_hours SET DEFAULT 0")
+        cur.execute("ALTER TABLE tasks ALTER COLUMN actual_hours SET NOT NULL")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"Migration warning tasks.actual_hours default: {e}")
 
     cur.close()
 

@@ -23,7 +23,7 @@ def _load_historical_tasks(conn):
         FROM tasks t
         JOIN sprints s  ON t.sprint_id  = s.id
         JOIN team_members tm ON t.assignee_id = tm.id
-        WHERE t.actual_hours IS NOT NULL AND s.status = 'Completed'
+        WHERE t.actual_hours > 0 AND s.status = 'Completed'
     """, conn)
 
 def _encode_priority(p):
@@ -255,7 +255,7 @@ class AutoBlockerDetector:
 class RiskDetector:
     def assess_task_risk(self, task, member_velocity, sprint_remaining_days):
         score = 0; reasons = []
-        if task.get("actual_hours") is None and task.get("estimated_hours"):
+        if (task.get("actual_hours") or 0) == 0 and task.get("estimated_hours"):
             if task["estimated_hours"]/8 > sprint_remaining_days:
                 score += 3; reasons.append(f"Estimated {task['estimated_hours']}h but {sprint_remaining_days} days left")
         if task.get("priority") in ("Critical","High") and task.get("status") == "Todo":
