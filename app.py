@@ -81,7 +81,7 @@ def set_cookie(name, value, days=None):
         window.parent.document.cookie = "{name}=" + "{cookie_val}" + "; path=/; SameSite=Lax";
         </script>
         """
-    st.iframe(srcdoc=js, height=0, width=0)
+    components.html(js, height=0, width=0)
 
 def delete_cookie(name):
     js = f"""
@@ -89,8 +89,7 @@ def delete_cookie(name):
     window.parent.document.cookie = "{name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     </script>
     """
-    st.iframe(srcdoc=js, height=0, width=0)
-
+    components.html(js, height=0, width=0)
 
 def create_session_token(email, role, name):
     data = {
