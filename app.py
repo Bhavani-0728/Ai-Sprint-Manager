@@ -2218,7 +2218,10 @@ elif page == "Task Creation":
                             _ah_def = 0.0 if (_t_ah is None or (isinstance(_t_ah, float) and pd.isna(_t_ah))) else float(_t_ah)
                             st.session_state[f"eteh_{_tid}"] = _eh_def
                             st.session_state[f"etah_{_tid}"] = _ah_def
-                            st.session_state[f"etbl_{_tid}"] = t.get("blocker_note") or ""
+                            blocker_val = t.get("blocker_note")
+                            if pd.isna(blocker_val):
+                                blocker_val = ""
+                            st.session_state[f"etbl_{_tid}"] = str(blocker_val)
                             e_t=st.text_input("Title",value=t["title"],key=f"ett_{_tid}")
                             e_s=st.selectbox("Status",["Todo","In Progress","Done","Blocked"],index=["Todo","In Progress","Done","Blocked"].index(t["status"]),key=f"ets_{_tid}")
                             e_p=st.selectbox("Priority",["Low","Medium","High","Critical"],index=["Low","Medium","High","Critical"].index(t["priority"]),key=f"etp_{_tid}")
@@ -2226,7 +2229,7 @@ elif page == "Task Creation":
                             e_sp2=st.selectbox("Pts",[1,2,3,5,8,13],index=[1,2,3,5,8,13].index(int(t["story_points"])) if int(t["story_points"]) in [1,2,3,5,8,13] else 2,key=f"etsp_{_tid}")
                             e_eh=st.number_input("Est.h",0.5,200.0,_eh_def,step=0.5,key=f"eteh_{_tid}")
                             e_ah=st.number_input("Act.h",0.0,200.0,_ah_def,step=0.5,key=f"etah_{_tid}")
-                            e_bl=st.text_input("Blocker",value=str(t.get("blocker_note") or ""),key=f"etbl_{_tid}")
+                            e_bl = st.text_input("Blocker",key=f"etbl_{_tid}")
                             sp_map={None:"— Backlog —"};sp_map.update({r["id"]:r["name"] for _,r in sdf.iterrows()} if not sdf.empty else {})
                             cur_spr=t["sprint_id"] if t["sprint_id"] in list(sp_map.keys()) else None
                             e_spr2=st.selectbox("Sprint",list(sp_map.keys()),format_func=lambda x:sp_map[x],index=list(sp_map.keys()).index(cur_spr),key=f"etspr_{_tid}")
