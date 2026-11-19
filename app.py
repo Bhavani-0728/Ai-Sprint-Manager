@@ -874,66 +874,6 @@ hr                    { border-color:#21262d !important; margin:10px 0 !importan
                          display:flex; align-items:center; justify-content:center; font-size:14px; }
 .proj-name            { color:#e6edf3; font-weight:700; font-size:14px; }
 
-/* ── SIDEBAR VERTICAL NAVIGATION BARS (Ultra-compact, zero-overflow) ── */
-.vnav-group-title {
-    color: #6e7681;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.9px;
-    text-transform: uppercase;
-    margin: 8px 0 2px 4px;
-}
-
-section[data-testid="stSidebar"] div.stButton > button {
-    text-align: left !important;
-    justify-content: flex-start !important;
-    padding: 5px 10px !important;
-    border-radius: 6px !important;
-    font-size: 12px !important;
-    font-weight: 500 !important;
-    height: 31px !important;
-    margin-bottom: 1px !important;
-    transition: all 0.12s ease-in-out !important;
-    border: 1px solid transparent !important;
-    border-left: 3px solid transparent !important;
-}
-
-section[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
-    background: linear-gradient(90deg, rgba(37,99,235,0.25) 0%, rgba(22,27,34,0.95) 100%) !important;
-    color: #58a6ff !important;
-    border: 1px solid rgba(88,166,255,0.35) !important;
-    border-left: 4px solid #58a6ff !important;
-    font-weight: 600 !important;
-    box-shadow: 0 2px 8px rgba(37,99,235,0.2) !important;
-}
-
-section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] {
-    background: transparent !important;
-    color: #8b949e !important;
-    border: 1px solid transparent !important;
-    border-left: 3px solid transparent !important;
-}
-
-section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:hover {
-    background: #21262d !important;
-    color: #e6edf3 !important;
-    border: 1px solid #30363d !important;
-    border-left: 3px solid #8b949e !important;
-    transform: translateX(2px) !important;
-}
-
-/* Hero Project Banner */
-.hero-proj-title {
-    font-size: 26px !important;
-    font-weight: 800 !important;
-    letter-spacing: -0.4px !important;
-    line-height: 1.15 !important;
-    background: linear-gradient(135deg, #ffffff 30%, #93c5fd 100%) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    display: inline-block !important;
-}
-
 /* Page content */
 .page-wrap            { padding:20px 24px; }
 
@@ -1373,92 +1313,78 @@ def chart_buf(fig):
 # ── SIDEBAR — project only, no nav ───────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0 8px">
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="width:28px;height:28px;border-radius:8px;
+    <div style="padding:12px 2px 14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="width:40px;height:40px;border-radius:10px;flex-shrink:0;
              background:linear-gradient(135deg,#2563eb,#7c3aed);
-             display:flex;align-items:center;justify-content:center;font-size:15px;
-             box-shadow:0 0 10px rgba(37,99,235,0.4)">⚡</div>
-        <span style="color:#e6edf3;font-weight:700;font-size:16px;letter-spacing:-0.3px">SprintAI</span>
+             box-shadow:0 0 18px #2563eb55;
+             display:flex;align-items:center;justify-content:center;font-size:22px">⚡</div>
+        <div>
+          <div style="color:#e6edf3;font-weight:700;font-size:17px;letter-spacing:-.3px">SprintAI</div>
+          <div style="color:#8b949e;font-size:10px;letter-spacing:.3px"></div>
+        </div>
       </div>
-      <span style="color:#58a6ff;font-size:10px;font-weight:600;background:rgba(37,99,235,0.15);
-                   border:1px solid rgba(88,166,255,0.3);padding:2px 7px;border-radius:12px">Agile</span>
+      <div style="background:linear-gradient(90deg,#2563eb18,#7c3aed18);
+           border:1px solid #2563eb30;border-radius:6px;
+           padding:5px 10px;font-size:11px;color:#8b949e;text-align:center;letter-spacing:.2px">
+        🤖 AI-Powered Agile Manager
+      </div>
     </div>""", unsafe_allow_html=True)
+    st.divider()
 
     projects = load_projects()
     if not projects.empty:
-        st.markdown('<div style="font-size:10px;color:#8b949e;font-weight:600;margin-bottom:2px">📁 ACTIVE PROJECT</div>', unsafe_allow_html=True)
-        sel_p = st.selectbox("Project", projects["name"].tolist(), label_visibility="collapsed")
-        prow = projects[projects["name"]==sel_p].iloc[0]
-        proj_id = int(prow["id"]); proj_name = prow["name"]; manager_email = prow.get("created_by", "") or ""
+        sel_p    = st.selectbox("📁 Project", projects["name"].tolist(), label_visibility="visible")
+        prow     = projects[projects["name"]==sel_p].iloc[0]
+        proj_id  = int(prow["id"]); proj_name = prow["name"]; manager_email = prow.get("created_by", "") or ""
     else:
         proj_id = None; proj_name = "—"; manager_email = ""
 
+    if st.session_state.get("role") == "Manager":
+        with st.expander("＋ New Project"):
+            with st.form("np", clear_on_submit=True):
+                n=st.text_input("Name *"); d=st.text_area("Description",height=50)
+                if st.form_submit_button("Create",type="primary"):
+                    if n.strip():
+                        user_email = st.session_state.get("user")
+                        owner_df = qry("SELECT id FROM profiles WHERE LOWER(email) = LOWER(%s)", [user_email])
+                        if not owner_df.empty:
+                            owner_id = owner_df.iloc[0]["id"]
+                            exe("INSERT INTO projects(name,description,created_by,owner_id)VALUES(%s,%s,%s,%s)",(n.strip(),d,user_email,owner_id))
+                        else:
+                            exe("INSERT INTO projects(name,description,created_by)VALUES(%s,%s,%s)",(n.strip(),d,user_email))
+                        st.rerun()
+                    else: st.error("Name required")
+    else:
+        st.caption("Member access: project creation is restricted.")
+
     if proj_id:
-        # ── Vertical Navigation Bars (Tightly packed, zero scroll) ────────────
-        st.markdown('<div class="vnav-group-title">📌 WORKSPACE</div>', unsafe_allow_html=True)
-        nav_workspace = [
-            ("Dashboard", "📊  Dashboard"),
-            ("Board", "🗂️  Board"),
-            ("Sprints", "🏃  Sprints"),
-            ("Projects", "📋  Projects"),
-            ("Task Creation", "🗒️  Task Creation"),
-        ]
-        for t_key, t_label in nav_workspace:
-            is_active = (st.session_state.tab == t_key)
-            if st.button(t_label, key=f"vnav_{t_key}", use_container_width=True, type="primary" if is_active else "secondary"):
-                if st.session_state.get("tab") != t_key:
-                    st.session_state.tab = t_key
-                    st.rerun()
-
-        st.markdown('<div class="vnav-group-title">👥 TEAM & LOGS</div>', unsafe_allow_html=True)
-        nav_collab = [
-            ("Team", "👥  Team"),
-            ("Daily Updates", "📝  Daily Updates"),
-        ]
-        for t_key, t_label in nav_collab:
-            is_active = (st.session_state.tab == t_key)
-            if st.button(t_label, key=f"vnav_{t_key}", use_container_width=True, type="primary" if is_active else "secondary"):
-                if st.session_state.get("tab") != t_key:
-                    st.session_state.tab = t_key
-                    st.rerun()
-
-        st.markdown('<div class="vnav-group-title">⚡ INTELLIGENCE</div>', unsafe_allow_html=True)
-        nav_intel = [
-            ("AI Insights", "🔮  AI Insights"),
-            ("Reports", "📄  Reports"),
-        ]
-        for t_key, t_label in nav_intel:
-            is_active = (st.session_state.tab == t_key)
-            if st.button(t_label, key=f"vnav_{t_key}", use_container_width=True, type="primary" if is_active else "secondary"):
-                if st.session_state.get("tab") != t_key:
-                    st.session_state.tab = t_key
-                    st.rerun()
-
-        # Mini Active Sprint Indicator
+        st.divider()
         act_s = load_active(proj_id)
         if act_s:
-            pp = act_s["planned_points"]; cp = act_s["completed_points"]; pct = cp / max(pp, 1)
-            st.markdown(f"""
-            <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:6px 10px;margin:8px 0 4px">
-              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600">
-                <span style="color:#3fb950">🟢 {act_s['name']}</span>
-                <span style="color:#8b949e">{cp}/{pp} pts</span>
-              </div>
-              <div style="background:#21262d;border-radius:3px;height:4px;margin-top:5px;overflow:hidden">
-                <div style="width:{min(pct*100,100):.0f}%;background:#3fb950;height:4px"></div>
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
+            pp=act_s["planned_points"]; cp=act_s["completed_points"]; pct=cp/max(pp,1)
+            st.markdown(f'<div style="color:#3fb950;font-size:12px;font-weight:600;margin-bottom:4px">🟢 {act_s["name"]}</div>', unsafe_allow_html=True)
+            st.caption(act_s.get("goal","") or "No goal set")
+            st.progress(min(pct,1.0), text=f"{cp}/{pp} pts · {pct*100:.0f}%")
+            if st.session_state.get("tab") in ["Dashboard", "AI Insights", "Reports", "Projects", "Board"]:
+                scan = get_sprint_scan_cached(int(act_s["id"]))
+                if scan["auto_blocked_count"] or scan["delayed_count"] or scan["at_risk_count"]:
+                    st.markdown(f"""
+                    <div style="background:#1a0b0b;border:1px solid #f8514940;border-radius:6px;padding:8px 10px;margin-top:8px">
+                      <div style="color:#f85149;font-size:11px;font-weight:700">🤖 AI DETECTED</div>
+                      <div style="color:#c9d1d9;font-size:11px;margin-top:4px">
+                        {f'⛔ {scan["auto_blocked_count"]} auto-flagged' if scan["auto_blocked_count"] else ''}
+                        {f'<br>⏰ {scan["delayed_count"]} delayed' if scan["delayed_count"] else ''}
+                        {f'<br>⚠️ {scan["at_risk_count"]} at risk' if scan["at_risk_count"] else ''}
+                      </div>
+                    </div>""", unsafe_allow_html=True)
+        else:
+            st.caption("⚪ No active sprint")
 
-    # Ultra-compact Sidebar Footer
-    st.markdown(f"""
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 2px 4px;font-size:11px;color:#8b949e;border-top:1px solid #21262d;margin-top:8px">
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px">👤 {st.session_state.get('user','')}</span>
-      <span style="color:#58a6ff;font-weight:600">{st.session_state.get('role','Member')}</span>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
+    st.divider()
+    st.caption("Python · Streamlit · Scikit-learn · SQLite")
+    st.caption(f"👤 {st.session_state.get('user')} ({st.session_state.get('role')})")
+    if st.button("🚪 Logout", use_container_width=True):
         st.session_state["logout_triggered"] = True
         logout_user()
         delete_cookie("session_token")
@@ -1468,106 +1394,51 @@ with st.sidebar:
 # ── Guard ─────────────────────────────────────────────────────────────────────
 if not proj_id:
     st.markdown("""
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:12px">
-      <div style="font-size:52px">⚡</div>
-      <div style="color:#e6edf3;font-size:24px;font-weight:700">Welcome to SprintAI</div>
-      <div style="color:#8b949e">Create your first project to get started.</div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:70vh;gap:12px">
+      <div style="font-size:48px">⚡</div>
+      <div style="color:#e6edf3;font-size:22px;font-weight:700">Welcome to SprintAI</div>
+      <div style="color:#8b949e">Create your first project in the sidebar.</div>
     </div>""", unsafe_allow_html=True)
-    if st.session_state.get("role") == "Manager":
-        with st.form("np_first", clear_on_submit=True):
-            n_first = st.text_input("Project Name *")
-            d_first = st.text_area("Description")
-            if st.form_submit_button("🚀 Create First Project", type="primary"):
-                if n_first.strip():
-                    user_email = st.session_state.get("user")
-                    owner_df = qry("SELECT id FROM profiles WHERE LOWER(email) = LOWER(%s)", [user_email])
-                    if not owner_df.empty:
-                        owner_id = owner_df.iloc[0]["id"]
-                        exe("INSERT INTO projects(name,description,created_by,owner_id)VALUES(%s,%s,%s,%s)",(n_first.strip(),d_first,user_email,owner_id))
-                    else:
-                        exe("INSERT INTO projects(name,description,created_by)VALUES(%s,%s,%s)",(n_first.strip(),d_first,user_email))
-                    st.rerun()
     st.stop()
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  MAIN PROJECT HERO SHOWCASE (Prominent Big Letters + Top Action Button)
+#  TOP NAV — project header + clickable tabs
 # ══════════════════════════════════════════════════════════════════════════════
-TAB_ICONS = {
-    "Dashboard": "📊", "Projects": "📋", "Board": "🗂️", "Sprints": "🏃",
-    "Task Creation": "🗒️", "Team": "👥", "AI Insights": "🔮", "Reports": "📄", "Daily Updates": "📝"
-}
+TABS = ["Dashboard","Projects","Board","Sprints","Task Creation","Team","AI Insights","Reports","Daily Updates"]
+TAB_ICONS = {"Dashboard":"📊","Projects":"📋","Board":"🗂️","Sprints":"🏃",
+             "Task Creation":"🗒️","Team":"👥","AI Insights":"🔮","Reports":"📄","Daily Updates":"📝"}
 
-header_act_s = load_active(proj_id)
-proj_desc = prow.get("description", "") or "Agile Sprint Tracking & AI Insights Workspace"
+# ── Project name above tabs (like Jira) ──────────────────────────────────────
+st.markdown(f"""
+<div style="background:#161b22;padding:8px 24px 0 24px;border-bottom:none">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+    <div style="width:28px;height:28px;border-radius:6px;
+         background:linear-gradient(135deg,#f97316,#ef4444);
+         display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🚀</div>
+    <span style="color:#e6edf3;font-size:20px;font-weight:700">{proj_name}</span>
+  </div>
+</div>""", unsafe_allow_html=True)
 
-if header_act_s:
-    s_pp = int(header_act_s.get("planned_points", 0))
-    s_cp = int(header_act_s.get("completed_points", 0))
-    s_pct = int((s_cp / max(s_pp, 1)) * 100)
-    sprint_pill = f'<span style="background:rgba(63,185,80,0.15);color:#3fb950;border:1px solid rgba(63,185,80,0.4);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">🟢 {header_act_s["name"]} · {s_cp}/{s_pp} pts ({s_pct}%)</span>'
-else:
-    sprint_pill = '<span style="background:rgba(139,148,158,0.12);color:#8b949e;border:1px solid rgba(139,148,158,0.25);padding:4px 12px;border-radius:20px;font-size:12px">⚪ No Active Sprint</span>'
+# Tab bar — using columns + buttons
+tab_cols = st.columns(len(TABS))
+for i, t in enumerate(TABS):
+    with tab_cols[i]:
+        is_active = (st.session_state.tab == t)
+        label = f"{TAB_ICONS[t]} {t}"
+        if is_active:
+            st.markdown(f"""
+            <div style="text-align:center;padding:10px 4px 8px;
+                 border-bottom:2px solid #58a6ff;background:#161b22;
+                 color:#58a6ff;font-size:12px;font-weight:600;
+                 cursor:pointer;white-space:nowrap">{label}</div>""",
+                unsafe_allow_html=True)
+        else:
+            if st.button(label, key=f"tab_{t}", use_container_width=True):
+                if st.session_state.get("tab") != t:
+                    st.session_state.tab = t
+                    st.rerun()
 
-# Two-column hero: Left for Big Project Title & Info, Right for Sprint Status & New Project Popover
-h_col1, h_col2 = st.columns([4.2, 1.8])
-
-with h_col1:
-    st.markdown(f"""
-    <div style="background:linear-gradient(135deg,#161b22 0%,#1c2436 50%,#151a28 100%);
-                border:1px solid rgba(88,166,255,0.25);border-radius:12px;
-                padding:16px 20px;box-shadow:0 6px 24px rgba(0,0,0,0.35);position:relative">
-      <div style="display:flex;align-items:center;gap:14px">
-        <div style="width:50px;height:50px;border-radius:12px;
-             background:linear-gradient(135deg,#f97316,#ef4444);
-             box-shadow:0 0 20px rgba(249,115,22,0.45);
-             display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">🚀</div>
-        <div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <span class="hero-proj-title">{proj_name}</span>
-            <span style="background:rgba(37,99,235,0.2);color:#58a6ff;border:1px solid rgba(88,166,255,0.4);padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:0.5px">ACTIVE PROJECT</span>
-          </div>
-          <div style="color:#8b949e;font-size:12px;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span>{proj_desc}</span>
-            <span style="color:#30363d">•</span>
-            <span style="color:#58a6ff;font-weight:600">📌 Active View: {TAB_ICONS.get(st.session_state.tab, '📊')} {st.session_state.tab}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with h_col2:
-    st.markdown(f"""
-    <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;justify-content:center;gap:6px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="color:#8b949e;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Sprint Status</span>
-        <span style="color:#58a6ff;font-size:11px;background:rgba(88,166,255,0.1);padding:2px 8px;border-radius:10px;border:1px solid rgba(88,166,255,0.25)">👤 {st.session_state.get('role', 'Member')}</span>
-      </div>
-      <div>{sprint_pill}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if st.session_state.get("role") == "Manager":
-        with st.popover("✨ + New Project", use_container_width=True):
-            st.markdown("#### ➕ Create New Project")
-            st.caption("Start a new project space in your workspace.")
-            with st.form("np_popover", clear_on_submit=True):
-                n_proj = st.text_input("Project Name *", placeholder="e.g. Mobile App v2")
-                d_proj = st.text_area("Description", placeholder="Project goal & scope...", height=70)
-                if st.form_submit_button("🚀 Create Project", type="primary", use_container_width=True):
-                    if n_proj.strip():
-                        user_email = st.session_state.get("user")
-                        owner_df = qry("SELECT id FROM profiles WHERE LOWER(email) = LOWER(%s)", [user_email])
-                        if not owner_df.empty:
-                            owner_id = owner_df.iloc[0]["id"]
-                            exe("INSERT INTO projects(name,description,created_by,owner_id)VALUES(%s,%s,%s,%s)",(n_proj.strip(),d_proj,user_email,owner_id))
-                        else:
-                            exe("INSERT INTO projects(name,description,created_by)VALUES(%s,%s,%s)",(n_proj.strip(),d_proj,user_email))
-                        st.rerun()
-                    else:
-                        st.error("Project name is required")
-
-st.markdown('<div style="background:#21262d;height:1px;margin:8px 0 16px 0"></div>', unsafe_allow_html=True)
+st.markdown('<div style="background:#30363d;height:1px;margin-bottom:0"></div>', unsafe_allow_html=True)
 
 page = st.session_state.tab
 
