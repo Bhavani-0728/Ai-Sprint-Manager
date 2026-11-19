@@ -128,6 +128,18 @@ def create_tables(conn):
     );
     """)
 
+    # 8. Keep-alive table (prevents Supabase free-tier project from pausing)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS keep_alive (
+        id SERIAL PRIMARY KEY,
+        last_ping TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    ALTER TABLE keep_alive ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS allow_anon_read_keep_alive ON keep_alive;
+    CREATE POLICY allow_anon_read_keep_alive ON keep_alive FOR SELECT TO anon USING (true);
+    INSERT INTO keep_alive (id, last_ping) VALUES (1, CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING;
+    """)
+
     # Indexes for performance
     cur.execute("CREATE INDEX IF NOT EXISTS idx_member_comments_proj_memb ON member_comments (project_id, member_id);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_member_comments_sprint ON member_comments (sprint_id);")
@@ -184,18 +196,20 @@ def create_tables(conn):
 
     # Dynamic migrations for legacy table columns (in case tables existed prior to mail/creator features)
     try:
-        cur.execute("ALTER TABLE projects ADD COLUMN IF NOT EXISTS created_by VARCHAR(255)")
+        cur.execute("ALTER TABLE projects ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);")
+        cur.execute("ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id UUID;")
         conn.commit()
     except Exception as e:
         conn.rollback()
-        print(f"Migration warning projects.created_by: {e}")
+        print(f"Migration warning projects columns: {e}")
 
     try:
-        cur.execute("ALTER TABLE team_members ADD COLUMN IF NOT EXISTS email VARCHAR(255)")
+        cur.execute("ALTER TABLE team_members ADD COLUMN IF NOT EXISTS email VARCHAR(255);")
+        cur.execute("ALTER TABLE team_members ADD COLUMN IF NOT EXISTS user_id UUID;")
         conn.commit()
     except Exception as e:
         conn.rollback()
-        print(f"Migration warning team_members.email: {e}")
+        print(f"Migration warning team_members columns: {e}")
 
     # Backfill any existing NULL actual_hours to 0 and set column default
     try:

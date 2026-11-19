@@ -27,7 +27,7 @@ SMTP_EMAIL    = _get_secret("SMTP_EMAIL")
 SMTP_PASSWORD = _get_secret("SMTP_PASSWORD")
 SMTP_HOST     = "smtp.gmail.com"
 SMTP_PORT     = 587
-SMTP_TIMEOUT  = 10   # seconds — keeps UI responsive
+SMTP_TIMEOUT  = 25   # seconds — increased from 10 to avoid mid-send timeout
 
 
 def _build_html_email(subject, body_html, to_email):
