@@ -131,7 +131,7 @@ if "user" not in st.session_state or "role" not in st.session_state or "user_nam
     st.session_state["role"] = None
     st.session_state["user_name"] = None
 
-# Auto-login if session token is found in cookies
+# Auto-login if session token is found in cookies (no rerun — avoids flash-back-to-landing on refresh)
 if not st.session_state["user"] and not st.session_state.get("logout_triggered"):
     token = cookies.get("session_token")
     if token:
@@ -140,7 +140,6 @@ if not st.session_state["user"] and not st.session_state.get("logout_triggered")
             st.session_state["user"] = data["email"]
             st.session_state["role"] = data["role"]
             st.session_state["user_name"] = data["name"]
-            st.rerun()
 
 def render_landing_page():
     qp = st.query_params
@@ -537,11 +536,54 @@ def render_landing_page():
     cards_html += '</div>'
     st.markdown(cards_html, unsafe_allow_html=True)
 
+    # ── CONTACT / HELP SECTION ──────────────────────────────────────────────────
+    st.markdown("""
+    <div id="contact" style="padding:60px 0 40px;border-top:1px solid rgba(255,255,255,0.07);margin-top:80px;">
+      <div style="text-align:center;margin-bottom:40px;">
+        <div style="font-size:28px;font-weight:800;color:#e6edf3;letter-spacing:-0.5px;">Get in Touch</div>
+        <div style="color:#8b949e;font-size:14px;margin-top:8px;">Questions, feedback, or need help? We'd love to hear from you.</div>
+      </div>
+      <div style="display:flex;gap:24px;justify-content:center;flex-wrap:wrap;max-width:900px;margin:0 auto;">
+
+        <div style="flex:1;min-width:220px;background:#161b22;border:1px solid #30363d;border-radius:12px;
+                    padding:24px;text-align:center;border-top:3px solid #2563eb;">
+          <div style="font-size:28px;margin-bottom:12px;">📧</div>
+          <div style="color:#e6edf3;font-weight:700;font-size:15px;margin-bottom:6px;">Email Support</div>
+          <div style="color:#8b949e;font-size:12px;margin-bottom:14px;">Reach our team directly for any queries.</div>
+          <a href="mailto:sprintaiteam@gmail.com" style="color:#58a6ff;font-size:13px;font-weight:600;text-decoration:none;">
+            sprintaiteam@gmail.com
+          </a>
+        </div>
+
+        <div style="flex:1;min-width:220px;background:#161b22;border:1px solid #30363d;border-radius:12px;
+                    padding:24px;text-align:center;border-top:3px solid #7c3aed;">
+          <div style="font-size:28px;margin-bottom:12px;">📖</div>
+          <div style="color:#e6edf3;font-weight:700;font-size:15px;margin-bottom:6px;">How It Works</div>
+          <div style="color:#8b949e;font-size:12px;margin-bottom:14px;">Manager creates sprints &amp; tasks.<br>Members log daily progress.<br>AI surfaces risks automatically.</div>
+          <span style="color:#3fb950;font-size:12px;font-weight:600;">No setup needed — just sign up!</span>
+        </div>
+
+        <div style="flex:1;min-width:220px;background:#161b22;border:1px solid #30363d;border-radius:12px;
+                    padding:24px;text-align:center;border-top:3px solid #f97316;">
+          <div style="font-size:28px;margin-bottom:12px;">🚀</div>
+          <div style="color:#e6edf3;font-weight:700;font-size:15px;margin-bottom:6px;">Quick Start</div>
+          <div style="color:#8b949e;font-size:12px;margin-bottom:14px;">1️⃣ Sign up as Manager<br>2️⃣ Create a project &amp; sprint<br>3️⃣ Add team &amp; assign tasks</div>
+          <span style="color:#58a6ff;font-size:12px;font-weight:600;">Up &amp; running in 5 minutes.</span>
+        </div>
+
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── FOOTER ──────────────────────────────────────────────────────────────────
     st.markdown("""
     <div style="padding:40px 0;text-align:center;border-top:1px solid rgba(255,255,255,0.05);
-                margin-top:80px;color:#8b949e;font-size:12px;">
+                margin-top:0;color:#8b949e;font-size:12px;">
         <div>⚡ SprintAI Agile Manager &amp; Analytics Suite · CVR College of Engineering</div>
         <div style="margin-top:8px;font-size:11px;color:#58a6ff;">Built for Agile Teams with Love.</div>
+        <div style="margin-top:6px;font-size:11px;">
+          <a href="mailto:sprintaiteam@gmail.com" style="color:#8b949e;text-decoration:none;">sprintaiteam@gmail.com</a>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1857,6 +1899,21 @@ elif page == "Board":
                         _qry_cached.clear()
                         get_sprint_scan_cached.clear()
 
+                        # ── Email manager when task marked Done or Blocked ──
+                        if ns != cur["status"] and ns in ("Done", "Blocked") and manager_email:
+                            _spr_nm_b = srow.get("name", "") if "srow" in dir() else ""
+                            _assignee_b = cur.get("assignee_name", "Team Member")
+                            notify_manager(
+                                manager_email,
+                                f"[SprintAI] Task {ns}: \'{sel_t}\' — {proj_name}",
+                                build_task_status_email(
+                                    _assignee_b, str(sel_t),
+                                    cur["status"], ns,
+                                    _spr_nm_b, proj_name,
+                                    nb if ns == "Blocked" else ""
+                                )
+                            )
+
                         st.success("Saved!")
                         st.rerun()
 
@@ -2217,6 +2274,20 @@ elif page == "Task Creation":
                                         if _ne:
                                             _sl = (sdf[sdf["id"] == e_spr2]["name"].values[0] if (e_spr2 is not None and not sdf.empty) else None)
                                             notify_member(_ne,f"[SprintAI] Task assigned to you: '{e_t}' — {proj_name}", build_task_reassignment_email(e_t,e_p,e_s,_sl,e_eh,proj_name))
+                                # Email manager when task marked Done or Blocked
+                                if e_s != t["status"] and e_s in ("Done", "Blocked") and manager_email:
+                                    _spr_nm_tc = (sdf[sdf["id"]==e_spr2]["name"].values[0] if (e_spr2 is not None and not sdf.empty) else None)
+                                    _actor_tc = opts2.get(e_a, "Team Member").split(" (")[0]
+                                    notify_manager(
+                                        manager_email,
+                                        f"[SprintAI] Task {e_s}: '{e_t}' — {proj_name}",
+                                        build_task_status_email(
+                                            _actor_tc, e_t,
+                                            t["status"], e_s,
+                                            _spr_nm_tc, proj_name,
+                                            e_bl if e_s == "Blocked" else ""
+                                        )
+                                    )
                                 st.success("Saved!")
                                 st.rerun()
                             if dl.form_submit_button("🗑️"):
