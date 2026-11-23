@@ -536,54 +536,47 @@ def render_landing_page():
     cards_html += '</div>'
     st.markdown(cards_html, unsafe_allow_html=True)
 
-    # ── CONTACT / HELP SECTION ──────────────────────────────────────────────────
+    # ── CONTACT / HELP SECTION (native Streamlit columns) ───────────────────
+    st.markdown("<hr style=\'border:1px solid #21262d;margin:60px 0 40px\'>", unsafe_allow_html=True)
+    st.markdown("""<div style='text-align:center;margin-bottom:28px'>
+      <span style='font-size:26px;font-weight:800;color:#e6edf3'>Get in Touch</span><br>
+      <span style='color:#8b949e;font-size:13px'>Questions, feedback, or need help? We\'d love to hear from you.</span>
+    </div>""", unsafe_allow_html=True)
+    cc1, cc2, cc3 = st.columns(3)
+    with cc1:
+        st.markdown("""
+        <div style="background:#161b22;border:1px solid #30363d;border-top:3px solid #2563eb;
+                    border-radius:12px;padding:24px;text-align:center;min-height:180px">
+          <div style="font-size:28px;margin-bottom:10px">📧</div>
+          <div style="color:#e6edf3;font-weight:700;font-size:14px;margin-bottom:6px">Email Support</div>
+          <div style="color:#8b949e;font-size:12px;margin-bottom:12px">Reach our team directly for any queries.</div>
+          <div style="color:#58a6ff;font-size:13px;font-weight:600">sprintaiteam@gmail.com</div>
+        </div>""", unsafe_allow_html=True)
+    with cc2:
+        st.markdown("""
+        <div style="background:#161b22;border:1px solid #30363d;border-top:3px solid #7c3aed;
+                    border-radius:12px;padding:24px;text-align:center;min-height:180px">
+          <div style="font-size:28px;margin-bottom:10px">📖</div>
+          <div style="color:#e6edf3;font-weight:700;font-size:14px;margin-bottom:6px">How It Works</div>
+          <div style="color:#8b949e;font-size:12px;margin-bottom:10px">Manager creates sprints and tasks.<br>Members log daily progress.<br>AI surfaces risks automatically.</div>
+          <div style="color:#3fb950;font-size:12px;font-weight:600">No setup needed — just sign up!</div>
+        </div>""", unsafe_allow_html=True)
+    with cc3:
+        st.markdown("""
+        <div style="background:#161b22;border:1px solid #30363d;border-top:3px solid #f97316;
+                    border-radius:12px;padding:24px;text-align:center;min-height:180px">
+          <div style="font-size:28px;margin-bottom:10px">🚀</div>
+          <div style="color:#e6edf3;font-weight:700;font-size:14px;margin-bottom:6px">Quick Start</div>
+          <div style="color:#8b949e;font-size:12px;margin-bottom:10px">1. Sign up as Manager<br>2. Create a project and sprint<br>3. Add team and assign tasks</div>
+          <div style="color:#58a6ff;font-size:12px;font-weight:600">Up and running in 5 minutes.</div>
+        </div>""", unsafe_allow_html=True)
+    # ── FOOTER ───────────────────────────────────────────────────────────────────
     st.markdown("""
-    <div id="contact" style="padding:60px 0 40px;border-top:1px solid rgba(255,255,255,0.07);margin-top:80px;">
-      <div style="text-align:center;margin-bottom:40px;">
-        <div style="font-size:28px;font-weight:800;color:#e6edf3;letter-spacing:-0.5px;">Get in Touch</div>
-        <div style="color:#8b949e;font-size:14px;margin-top:8px;">Questions, feedback, or need help? We'd love to hear from you.</div>
-      </div>
-      <div style="display:flex;gap:24px;justify-content:center;flex-wrap:wrap;max-width:900px;margin:0 auto;">
-
-        <div style="flex:1;min-width:220px;background:#161b22;border:1px solid #30363d;border-radius:12px;
-                    padding:24px;text-align:center;border-top:3px solid #2563eb;">
-          <div style="font-size:28px;margin-bottom:12px;">📧</div>
-          <div style="color:#e6edf3;font-weight:700;font-size:15px;margin-bottom:6px;">Email Support</div>
-          <div style="color:#8b949e;font-size:12px;margin-bottom:14px;">Reach our team directly for any queries.</div>
-          <a href="mailto:sprintaiteam@gmail.com" style="color:#58a6ff;font-size:13px;font-weight:600;text-decoration:none;">
-            sprintaiteam@gmail.com
-          </a>
-        </div>
-
-        <div style="flex:1;min-width:220px;background:#161b22;border:1px solid #30363d;border-radius:12px;
-                    padding:24px;text-align:center;border-top:3px solid #7c3aed;">
-          <div style="font-size:28px;margin-bottom:12px;">📖</div>
-          <div style="color:#e6edf3;font-weight:700;font-size:15px;margin-bottom:6px;">How It Works</div>
-          <div style="color:#8b949e;font-size:12px;margin-bottom:14px;">Manager creates sprints &amp; tasks.<br>Members log daily progress.<br>AI surfaces risks automatically.</div>
-          <span style="color:#3fb950;font-size:12px;font-weight:600;">No setup needed — just sign up!</span>
-        </div>
-
-        <div style="flex:1;min-width:220px;background:#161b22;border:1px solid #30363d;border-radius:12px;
-                    padding:24px;text-align:center;border-top:3px solid #f97316;">
-          <div style="font-size:28px;margin-bottom:12px;">🚀</div>
-          <div style="color:#e6edf3;font-weight:700;font-size:15px;margin-bottom:6px;">Quick Start</div>
-          <div style="color:#8b949e;font-size:12px;margin-bottom:14px;">1️⃣ Sign up as Manager<br>2️⃣ Create a project &amp; sprint<br>3️⃣ Add team &amp; assign tasks</div>
-          <span style="color:#58a6ff;font-size:12px;font-weight:600;">Up &amp; running in 5 minutes.</span>
-        </div>
-
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── FOOTER ──────────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div style="padding:40px 0;text-align:center;border-top:1px solid rgba(255,255,255,0.05);
-                margin-top:0;color:#8b949e;font-size:12px;">
-        <div>⚡ SprintAI Agile Manager &amp; Analytics Suite · CVR College of Engineering</div>
+    <div style="padding:36px 0 20px;text-align:center;border-top:1px solid rgba(255,255,255,0.05);
+                margin-top:40px;color:#8b949e;font-size:12px;">
+        <div>&#9889; SprintAI Agile Manager &amp; Analytics Suite &middot; CVR College of Engineering</div>
         <div style="margin-top:8px;font-size:11px;color:#58a6ff;">Built for Agile Teams with Love.</div>
-        <div style="margin-top:6px;font-size:11px;">
-          <a href="mailto:sprintaiteam@gmail.com" style="color:#8b949e;text-decoration:none;">sprintaiteam@gmail.com</a>
-        </div>
+        <div style="margin-top:6px;font-size:11px;color:#8b949e;">sprintaiteam@gmail.com</div>
     </div>
     """, unsafe_allow_html=True)
 
