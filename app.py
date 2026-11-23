@@ -1197,10 +1197,39 @@ def load_active(pid):
     return df.iloc[0].to_dict() if not df.empty else None
 
 def apply_role_task_filter(df):
-    # All roles see all tasks — Members can view but not edit others' tasks (enforced in UI)
+    """Members see ONLY tasks assigned to them. Managers see everything."""
     if df is None or df.empty:
         return df
-    return df
+    role = st.session_state.get("role")
+    if role != "Member":
+        return df  # Manager / other roles → all tasks
+
+    user_email = str(st.session_state.get("user", "")).strip().lower()
+    if not user_email:
+        return df
+
+    # Primary match: assignee_email column (most reliable)
+    if "assignee_email" in df.columns:
+        matched = df[df["assignee_email"].fillna("").str.strip().str.lower() == user_email]
+        if not matched.empty:
+            return matched
+
+    # Fallback: match by name from user_name session key
+    user_name = str(st.session_state.get("user_name", "")).strip().lower()
+    if user_name and "assignee_name" in df.columns:
+        matched_name = df[df["assignee_name"].fillna("").str.strip().str.lower() == user_name]
+        if not matched_name.empty:
+            return matched_name
+
+    # Last resort: tasks where assignee_email is NULL but email prefix matches name
+    if "assignee_name" in df.columns:
+        prefix = user_email.split("@")[0].lower()
+        matched_prefix = df[df["assignee_name"].fillna("").str.lower().str.replace(r"[^a-z0-9]", "", regex=True).str.contains(prefix.replace(".", "").replace("_", ""), regex=False)]
+        if not matched_prefix.empty:
+            return matched_prefix
+
+    # No match at all — return empty (member has no assigned tasks)
+    return df.iloc[0:0]
 
 def load_tasks(sprint_id=None, project_id=None, include_planning=False):
     s="""SELECT t.*,tm.name as assignee_name,tm.email as assignee_email,tm.velocity_avg,tm.avatar_color,sp.status as sprint_status
