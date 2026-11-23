@@ -68,7 +68,8 @@ def _build_html_email(subject, body_html, to_email):
 
 def _send_email(to_email, subject, body_html):
     """
-    Send email synchronously via Gmail SMTP.
+    Send email via Gmail SMTP.
+    Tries port 587 (STARTTLS) first, falls back to port 465 (SSL).
     Fails silently — prints error to console but never raises.
     """
     if not SMTP_EMAIL or not SMTP_PASSWORD:
@@ -78,19 +79,32 @@ def _send_email(to_email, subject, body_html):
         print("[SprintAI Email] No recipient email. Skipping.")
         return
 
+    msg = _build_html_email(subject, body_html, to_email.strip())
+
+    # ── Try port 587 (STARTTLS) ───────────────────────────────────────────────
     try:
-        msg = _build_html_email(subject, body_html, to_email.strip())
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
+        with smtplib.SMTP(SMTP_HOST, 587, timeout=SMTP_TIMEOUT) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(SMTP_EMAIL, SMTP_PASSWORD)
             server.sendmail(SMTP_EMAIL, to_email.strip(), msg.as_string())
-        print(f"[SprintAI Email] ✅ Sent '{subject}' → {to_email}")
+        print(f"[SprintAI Email] ✅ Sent (587) '{subject}' → {to_email}")
+        return
+    except Exception as e1:
+        print(f"[SprintAI Email] ⚠️ Port 587 failed: {e1} — trying 465...")
+
+    # ── Fallback: port 465 (SSL) ──────────────────────────────────────────────
+    try:
+        with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=SMTP_TIMEOUT) as server:
+            server.ehlo()
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.sendmail(SMTP_EMAIL, to_email.strip(), msg.as_string())
+        print(f"[SprintAI Email] ✅ Sent (465) '{subject}' → {to_email}")
     except smtplib.SMTPException as e:
-        print(f"[SprintAI Email] ❌ SMTP error sending to {to_email}: {e}")
+        print(f"[SprintAI Email] ❌ SMTP error (465) sending to {to_email}: {e}")
     except OSError as e:
-        print(f"[SprintAI Email] ❌ Network error sending to {to_email}: {e}")
+        print(f"[SprintAI Email] ❌ Network error (465) sending to {to_email}: {e}")
     except Exception as e:
         print(f"[SprintAI Email] ❌ Unexpected error sending to {to_email}: {e}")
 
