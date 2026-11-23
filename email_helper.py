@@ -30,17 +30,30 @@ SMTP_PORT     = 587
 SMTP_TIMEOUT  = 25   # seconds — increased from 10 to avoid mid-send timeout
 
 
-def _build_html_email(subject, body_html, to_email):
-    """Build a MIME multipart email with no-reply headers."""
-    msg = MIMEMultipart("alternative")
-    msg["From"]    = f"SprintAI Notifications <{SMTP_EMAIL}>"
-    msg["To"]      = to_email
-    msg["Subject"] = subject
-    msg["Reply-To"] = "no-reply@sprintai.dev"
-    msg["X-Auto-Response-Suppress"] = "All"
+import email.utils
+import re
 
-    full_html = f"""
+def _strip_html(html_str):
+    """Simple regex helper to extract plain text from HTML for spam compliance."""
+    clean = re.sub(r'<[^>]+>', ' ', html_str)
+    return re.sub(r'\s+', ' ', clean).strip()
+
+def _build_html_email(subject, body_html, to_email):
+    """Build a compliant MIME multipart email with valid headers and plain-text fallback."""
+    msg = MIMEMultipart("alternative")
+    msg["From"] = f"SprintAI Notifications <{SMTP_EMAIL}>"
+    msg["To"] = to_email.strip()
+    msg["Subject"] = subject
+    msg["Reply-To"] = SMTP_EMAIL
+    msg["Date"] = email.utils.formatdate(localtime=True)
+    msg["Message-ID"] = email.utils.make_msgid(domain="gmail.com")
+
+    plain_text = f"SprintAI Notification:\n\n{_strip_html(body_html)}\n\nThis is an automated notification from SprintAI. Please do not reply."
+    msg.attach(MIMEText(plain_text, "plain", "utf-8"))
+
+    full_html = f"""<!DOCTYPE html>
     <html>
+    <head><meta charset="utf-8"></head>
     <body style="margin:0;padding:0;background:#0d1117;font-family:'Segoe UI',Arial,sans-serif;">
       <div style="max-width:600px;margin:20px auto;background:#161b22;border:1px solid #30363d;border-radius:12px;overflow:hidden;">
         <div style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:20px 24px;">
@@ -62,7 +75,7 @@ def _build_html_email(subject, body_html, to_email):
     </body>
     </html>
     """
-    msg.attach(MIMEText(full_html, "html"))
+    msg.attach(MIMEText(full_html, "html", "utf-8"))
     return msg
 
 
