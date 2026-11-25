@@ -25,11 +25,13 @@ def _get_secret(key: str, default: str = "") -> str:
         return default
 SMTP_EMAIL    = _get_secret("SMTP_EMAIL")
 SMTP_PASSWORD = _get_secret("SMTP_PASSWORD")
+BREVO_API_KEY = _get_secret("BREVO_API_KEY")
 SMTP_HOST     = "smtp.gmail.com"
 SMTP_PORT     = 587
 SMTP_TIMEOUT  = 25   # seconds — increased from 10 to avoid mid-send timeout
 
-
+import urllib.request
+import json
 import email.utils
 import re
 
@@ -81,20 +83,53 @@ def _build_html_email(subject, body_html, to_email):
 
 def _send_email(to_email, subject, body_html):
     """
-    Send email via Gmail SMTP.
-    Tries port 587 (STARTTLS) first, falls back to port 465 (SSL).
+    Send email via Brevo HTTPS REST API (Port 443 — works 100% on Render Free Tier).
+    Falls back to Gmail SMTP (ports 587/465) if Brevo is not configured.
     Fails silently — prints error to console but never raises.
     """
-    if not SMTP_EMAIL or not SMTP_PASSWORD:
-        print("[SprintAI Email] SMTP credentials not configured. Skipping.")
-        return
-    if not to_email or not to_email.strip():
+    if not to_email or not str(to_email).strip():
         print("[SprintAI Email] No recipient email. Skipping.")
+        return
+
+    # ── Method 1: Brevo HTTPS REST API (Port 443 — Bypasses Render's firewall) ──
+    brevo_key = _get_secret("BREVO_API_KEY")
+    if brevo_key:
+        try:
+            url = "https://api.brevo.com/v3/smtp/email"
+            payload = {
+                "sender": {
+                    "name": "SprintAI Notifications",
+                    "email": SMTP_EMAIL or "sprintai.noreply@gmail.com"
+                },
+                "to": [{"email": str(to_email).strip()}],
+                "subject": subject,
+                "htmlContent": body_html
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "accept": "application/json",
+                    "api-key": brevo_key.strip(),
+                    "content-type": "application/json"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status in (200, 201, 202):
+                    print(f"[SprintAI Email] ✅ Sent via HTTPS (Port 443) '{subject}' → {to_email}")
+                    return
+        except Exception as e_brevo:
+            print(f"[SprintAI Email] ⚠️ Brevo HTTPS API failed: {e_brevo} — trying SMTP fallback...")
+
+    # ── Method 2: Gmail SMTP Fallback ───────────────────────────────────────────
+    if not SMTP_EMAIL or not SMTP_PASSWORD:
+        print("[SprintAI Email] Neither Brevo API key nor SMTP credentials configured. Skipping.")
         return
 
     msg = _build_html_email(subject, body_html, to_email.strip())
 
-    # ── Try port 587 (STARTTLS) ───────────────────────────────────────────────
+    # Try port 587 (STARTTLS)
     try:
         with smtplib.SMTP(SMTP_HOST, 587, timeout=SMTP_TIMEOUT) as server:
             server.ehlo()
@@ -107,19 +142,15 @@ def _send_email(to_email, subject, body_html):
     except Exception as e1:
         print(f"[SprintAI Email] ⚠️ Port 587 failed: {e1} — trying 465...")
 
-    # ── Fallback: port 465 (SSL) ──────────────────────────────────────────────
+    # Fallback to port 465 (SSL)
     try:
         with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=SMTP_TIMEOUT) as server:
             server.ehlo()
             server.login(SMTP_EMAIL, SMTP_PASSWORD)
             server.sendmail(SMTP_EMAIL, to_email.strip(), msg.as_string())
         print(f"[SprintAI Email] ✅ Sent (465) '{subject}' → {to_email}")
-    except smtplib.SMTPException as e:
-        print(f"[SprintAI Email] ❌ SMTP error (465) sending to {to_email}: {e}")
-    except OSError as e:
-        print(f"[SprintAI Email] ❌ Network error (465) sending to {to_email}: {e}")
     except Exception as e:
-        print(f"[SprintAI Email] ❌ Unexpected error sending to {to_email}: {e}")
+        print(f"[SprintAI Email] ❌ SMTP error (465) sending to {to_email}: {e}")
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
